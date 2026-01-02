@@ -39,28 +39,6 @@ This makes the project easy to extend with new capabilities.
 
 --------------------------------------------------
 
-PROJECT STRUCTURE
-
-chat-agent/
-├── main.py                     Application entry point
-├── telegram_bot.py             Telegram API interface
-├── ollama_chat.py              Ollama LLM wrapper + memory
-├── autopilot/                  Autonomous agent logic
-│   ├── autopilot.py
-│   ├── policy.py
-│   ├── config.py
-│   ├── store.py
-│   ├── timeutils.py
-│   └── prompts.py
-├── ollama_system_prompt/       System prompt files (auto-loaded)
-├── ollama_context/             External context files (auto-loaded)
-├── ollama_state/               Conversation memory
-├── agent_state/                Agent timing / state
-├── .env.example                Environment variable template
-└── README.txt
-
---------------------------------------------------
-
 ENVIRONMENT VARIABLES
 
 Create a .env file:
