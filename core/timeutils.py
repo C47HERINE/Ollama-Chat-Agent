@@ -1,0 +1,78 @@
+from datetime import datetime, timedelta, timezone
+import os, time
+
+# Force local offset correction on Windows if needed
+LOCAL_OFFSET = -time.timezone if (time.localtime().tm_isdst == 0) else -time.altzone
+LOCAL_TZ = timezone(timedelta(seconds=LOCAL_OFFSET))
+
+def tz_name() -> str:
+    """Return TZ from env as a raw string (no validation)."""
+    return (os.getenv("TZ") or "").strip()
+
+def now_ms() -> int:
+    """Return current epoch time in milliseconds."""
+    return int(time.time() * 1000)
+
+def now_s() -> float:
+    """Return current epoch time in seconds."""
+    return time.time()
+
+def local_dt() -> datetime:
+    """Return OS-local datetime (timezone-aware)."""
+    return datetime.now(LOCAL_TZ)
+
+def local_dt_from_ms(ms: int) -> datetime:
+    """Convert epoch ms to OS-local datetime (timezone-aware)."""
+    return datetime.fromtimestamp(ms / 1000, LOCAL_TZ)
+
+def local_hour() -> int:
+    """Return OS-local hour."""
+    return local_dt().hour
+
+def weekday_label() -> str:
+    """Return weekday/weekend label from OS-local date."""
+    return "weekend" if local_dt().weekday() >= 5 else "weekday"
+
+def is_quiet_hours(hour: int, quiet_start_hour: int, quiet_end_hour: int) -> bool:
+    """Return True if hour falls in quiet hours."""
+    return hour >= quiet_start_hour or hour < quiet_end_hour
+
+def time_of_day_label(hour: int) -> str:
+    """Return morning/afternoon/evening/night label."""
+    if 5 <= hour < 12:
+        return "morning"
+    if 12 <= hour < 17:
+        return "afternoon"
+    if 17 <= hour < 22:
+        return "evening"
+    return "night"
+
+def fmt_local_ms(ms: int) -> str:
+    """Format epoch ms into OS-local timestamp string."""
+    if not ms:
+        return "—"
+    dt = local_dt_from_ms(ms)
+    return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+def today_key_local() -> str:
+    """Return YYYY-MM-DD using OS-local date."""
+    return local_dt().strftime("%Y-%m-%d")
+
+def daytime_bucket() -> str:
+    """Return sunrise/sunset/none from OS-local hour."""
+    hour = local_dt().hour
+    if 6 <= hour < 14:
+        return "sunrise"
+    if 14 <= hour < 22:
+        return "sunset"
+    return "none"
+
+def jitter_ms(min_ms: int, max_ms: int) -> int:
+    """Return deterministic jitter in milliseconds."""
+    frac = time.time() % 1
+    return int(min_ms + frac * (max_ms - min_ms))
+
+def pseudo_random_range(min_v: int, max_v: int) -> int:
+    """Return deterministic pseudo-random integer in range."""
+    frac = time.time() % 1
+    return int(min_v + frac * (max_v - min_v))

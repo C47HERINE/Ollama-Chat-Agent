@@ -1,5 +1,6 @@
-import json, time, os, requests
+import json, os, requests
 from dotenv import load_dotenv
+import core.timeutils as t
 
 load_dotenv()
 
@@ -58,7 +59,7 @@ class OllamaChatbot:
         payload = {
             "model": self.model,
             "host": self.host,
-            "saved_ms": int(time.time() * 1000),
+            "saved_ms": t.now_ms(),
             "history": self.history,
         }
         with open(self.state_path, "w", encoding="utf-8") as f:
@@ -75,29 +76,24 @@ class OllamaChatbot:
 
     def build_messages(self, user_text):
         messages = []
-        lt = time.localtime()
-        date_str = f"{lt.tm_year:04d}-{lt.tm_mon:02d}-{lt.tm_mday:02d}"
-        time_str = f"{lt.tm_hour:02d}:{lt.tm_min:02d}"
-        tod = (
-            "morning" if 5 <= lt.tm_hour < 12 else
-            "afternoon" if 12 <= lt.tm_hour < 17 else
-            "evening" if 17 <= lt.tm_hour < 22 else
-            "night"
-            )
-        wk = "weekend" if lt.tm_wday >= 5 else "weekday"
-        messages.append({
-            "role": "system",
-            "content": f"Meta: Local date {date_str}, local time {time_str}, {tod}, {wk}."
-            })
+        dt = t.local_dt()
+        date_str = dt.strftime("%Y-%m-%d")
+        time_str = dt.strftime("%H:%M")
+        tod = t.time_of_day_label(dt.hour)
+        wk = t.weekday_label()
+        messages.append(
+            {
+                "role": "system",
+                "content": f"Meta: Local date {date_str}, local time {time_str}, {tod}, {wk}.",
+            }
+        )
         system_text = self.read_all_text_files(self.system_dir)
         context_text = self.read_all_text_files(self.context_dir)
         if system_text:
             messages.append({"role": "system", "content": system_text})
         if context_text:
             messages.append({"role": "system", "content": f"Context:\n{context_text}"})
-        # previous conversation
         messages.extend(self.history)
-        # current user message
         messages.append({"role": "user", "content": user_text})
         return messages
 
@@ -130,7 +126,7 @@ class OllamaChatbot:
             print("Assistant: ", end="", flush=True)
             assistant_text = self.stream_chat(
                 messages,
-                on_token=lambda t: print(t, end="", flush=True),
+                on_token=lambda c: print(c, end="", flush=True),
             )
             print()
         else:

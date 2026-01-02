@@ -1,8 +1,8 @@
 from .config import default_settings
-from .timeutils import now_ms
 from .prompts import build_prompt
 from . import policy, state
-import os, time
+import core.timeutils as t
+import os
 
 class AutoPilot:
     def __init__(self, tick_every_seconds=30, state_dir=None):
@@ -13,7 +13,8 @@ class AutoPilot:
         self.tick_every_seconds = tick_every_seconds
         self.state_dir = self.cfg["state_dir"]
         self.known_chats = set()
-        self._next_tick = time.time() + tick_every_seconds
+        self.next_tick_s = t.now_s() + tick_every_seconds
+
         os.makedirs(self.state_dir, exist_ok=True)
 
     def reset_state(self, chat_id):
@@ -34,10 +35,10 @@ class AutoPilot:
         self.register_chat(chat_id)
         st = self.load_state(chat_id)
         policy.roll_cap_on_inbound(st, self.cfg)
-        t = now_ms()
-        st["last_inbound_ms"] = t
+        ms = t.now_ms()
+        st["last_inbound_ms"] = ms
         st["last_inbound_text"] = text
-        st["last_activity_ms"] = max(st.get("last_activity_ms", 0), t)
+        st["last_activity_ms"] = max(st.get("last_activity_ms", 0), ms)
         st["scheduled_send_ms"] = 0
         st["scheduled_kind"] = ""
         st["pending_inbound_count"] = int(st.get("pending_inbound_count", 0)) + 1
@@ -47,25 +48,25 @@ class AutoPilot:
     def observe_outbound(self, chat_id, text, cooldown_minutes=60, allow_addon=False):
         self.register_chat(chat_id)
         st = self.load_state(chat_id)
-        t = now_ms()
-        st["last_outbound_ms"] = t
+        ms = t.now_ms()
+        st["last_outbound_ms"] = ms
         st["last_outbound_text"] = text
-        st["last_activity_ms"] = max(st.get("last_activity_ms", 0), t)
+        st["last_activity_ms"] = max(st.get("last_activity_ms", 0), ms)
         st["pending_inbound_count"] = 0
-        st["next_eligible_send_ms"] = t + int(cooldown_minutes * 60 * 1000)
+        st["next_eligible_send_ms"] = ms + int(cooldown_minutes * 60 * 1000)
         if allow_addon:
-            policy.maybe_schedule_addon_immediately(st, self.cfg, base_ms=t)
+            policy.maybe_schedule_addon_immediately(st, self.cfg, base_ms=ms)
         self.save_state(chat_id, st)
 
     def format_status(self, chat_id):
         st = self.load_state(chat_id)
-        now = now_ms()
+        now = t.now_ms()
 
         def fmt_ms(ts):
             if not ts:
                 return "—"
-            lt = time.localtime(ts / 1000)
-            return f"{lt.tm_year:04d}-{lt.tm_mon:02d}-{lt.tm_mday:02d} {lt.tm_hour:02d}:{lt.tm_min:02d}:{lt.tm_sec:02d}"
+            dt = t.local_dt_from_ms(ts)
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
 
         def age_minutes(ts):
             if not ts:
@@ -127,37 +128,32 @@ class AutoPilot:
         return "\n".join(lines)
 
     def tick(self, send_fn, generate_fn):
-        if time.time() < self._next_tick:
+        if t.now_s() < self.next_tick_s:
             return False
+        self.next_tick_s = t.now_s() + self.tick_every_seconds
 
-        self._next_tick = time.time() + self.tick_every_seconds
         for chat_id in list(self.known_chats):
             st = self.load_state(chat_id)
-
-            if st.get("scheduled_send_ms", 0) and now_ms() >= st["scheduled_send_ms"]:
+            if st.get("scheduled_send_ms", 0) and t.now_ms() >= st["scheduled_send_ms"]:
                 kind = st.get("scheduled_kind") or "starter"
                 prompt = build_prompt(kind)
 
                 st["scheduled_send_ms"] = 0
                 st["scheduled_kind"] = ""
                 text = (generate_fn(chat_id, prompt) or "").strip()
-
                 if text:
                     send_fn(chat_id, text)
                     st["last_outbound_text"] = text
                     policy.apply_post_send_updates(st, kind, self.cfg)
                 self.save_state(chat_id, st)
                 continue
-
             if st.get("scheduled_send_ms", 0):
                 self.save_state(chat_id, st)
                 continue
-
-            if policy.should_schedule_addon(chat_id, st, self.cfg):
+            if policy.should_schedule_addon(st, self.cfg):
                 policy.schedule_addon(st, self.cfg)
                 self.save_state(chat_id, st)
                 continue
-
             if policy.should_schedule_starter(st, self.cfg):
                 policy.schedule_starter(st, self.cfg)
                 self.save_state(chat_id, st)

@@ -1,11 +1,11 @@
-from .timeutils import local_time, time_of_day_label, weekday_label
+import core.timeutils as t
 
 def meta_header():
-    lt = local_time()
-    date_str = f"{lt.tm_year:04d}-{lt.tm_mon:02d}-{lt.tm_mday:02d}"
-    time_str = f"{lt.tm_hour:02d}:{lt.tm_min:02d}"
-    tod = time_of_day_label(lt.tm_hour)
-    wk = weekday_label()
+    dt = t.local_dt()
+    date_str = dt.strftime("%Y-%m-%d")
+    time_str = dt.strftime("%H:%M")
+    tod = t.time_of_day_label(dt.hour)
+    wk = t.weekday_label()
     return (
         f"Meta: Local date {date_str}, local time {time_str}, {tod}, {wk}.\n"
         "Instruction: Be natural, conversational, and context-aware.\n"
