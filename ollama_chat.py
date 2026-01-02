@@ -64,6 +64,15 @@ class OllamaChatbot:
         with open(self.state_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2, ensure_ascii=False)
 
+    def inject_history_note(self, text, role="system"):
+        """Append a single note into the saved conversation history."""
+        text = (text or "").strip()
+        if not text:
+            return False
+        self.history.append({"role": role, "content": text})
+        self.save_history()
+        return True
+
     def build_messages(self, user_text):
         messages = []
         lt = time.localtime()
