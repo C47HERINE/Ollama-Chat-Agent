@@ -1,8 +1,5 @@
-import os
-import re
-import torch
-from chatterbox.tts_turbo import ChatterboxTurboTTS
-
+import os, re, torch
+from chatterbox.tts import ChatterboxTTS
 
 class VoiceRouter:
     """Routes assistant output to text or voice memo based on rules."""
@@ -13,12 +10,19 @@ class VoiceRouter:
         threshold_chars=250,
         voice_command="/voice",
         device="cuda",
-        audio_prompt_path="EllenPage.mp3",
+        audio_prompt_path=None,
+        temperature=None,
+        cfg_weight=None,
     ):
         self.audio_out_path = audio_out_path
         self.threshold_chars = int(threshold_chars)
         self.voice_command = voice_command
-        self.audio_prompt_path = audio_prompt_path
+        env_prompt = os.getenv("VOICE_PROMPT_WAV")
+        env_temp = os.getenv("VOICE_TEMPERATURE")
+        env_cfg = os.getenv("VOICE_CFG_WEIGHT")
+        self.audio_prompt_path = audio_prompt_path if audio_prompt_path is not None else (env_prompt or None)
+        self.temperature = float(temperature) if temperature is not None else (float(env_temp) if env_temp else 0.8)
+        self.cfg_weight = float(cfg_weight) if cfg_weight is not None else (float(env_cfg) if env_cfg else 0.5)
 
         if device:
             self.device = device
@@ -29,7 +33,15 @@ class VoiceRouter:
 
     def ensure_model(self):
         if self.model is None:
-            self.model = ChatterboxTurboTTS.from_pretrained(device=self.device)
+            self.model = ChatterboxTTS.from_pretrained(device=self.device)
+
+    def strip_voice_command(self, text: str) -> str:
+        if not text:
+            return ""
+        idx = text.find(self.voice_command)
+        if idx == -1:
+            return text
+        return (text[:idx] + text[idx + len(self.voice_command):]).strip()
 
     def remove_emojis(self, text: str) -> str:
         if not text:
@@ -52,24 +64,13 @@ class VoiceRouter:
         )
         return emoji_pattern.sub("", text)
 
-    def split_on_voice_command(self, text: str):
-        t = (text or "").strip()
-        if not t:
-            return "", ""
-
-        pat = re.compile(rf"(?im)^\s*{re.escape(self.voice_command)}\b")
-        m = pat.search(t)
-        if not m:
-            return t, ""
-
-        text_part = t[: m.start()].strip()
-        voice_part = t[m.end() :].strip()
-        voice_part = self.remove_emojis(voice_part).strip()
-        return text_part, voice_part
-
-    def should_send_voice_by_length(self, text: str) -> bool:
-        cleaned = self.remove_emojis(text or "")
-        return len(cleaned.strip()) >= self.threshold_chars
+    def should_send_voice(self, text: str) -> bool:
+        if not text:
+            return False
+        if self.voice_command in text:
+            return True
+        cleaned = self.remove_emojis(text)
+        return len(cleaned) >= self.threshold_chars
 
     def render_voice(self, text: str) -> str:
         self.ensure_model()
@@ -78,10 +79,11 @@ class VoiceRouter:
         if not clean:
             clean = "..."
 
-        wav = (
-            self.model.generate(clean, audio_prompt_path=self.audio_prompt_path)
-            if self.audio_prompt_path
-            else self.model.generate(clean)
+        wav = self.model.generate(
+            clean,
+            audio_prompt_path=self.audio_prompt_path,
+            temperature=self.temperature,
+            cfg_weight=self.cfg_weight,
         )
 
         out_dir = os.path.dirname(self.audio_out_path)
@@ -115,17 +117,11 @@ class VoiceRouter:
             wf.writeframes(pcm.tobytes())
 
     def send(self, tg, chat_id: int, assistant_text: str):
-        text_part, voice_part = self.split_on_voice_command(assistant_text)
+        assistant_text = assistant_text or ""
 
-        if voice_part:
-            if text_part:
-                tg.send_message(chat_id, text_part)
-            audio_path = self.render_voice(voice_part)
-            tg.send_voice(chat_id, audio_path)
-            return "mixed", assistant_text
-
-        if self.should_send_voice_by_length(assistant_text):
-            audio_path = self.render_voice(assistant_text)
+        if self.should_send_voice(assistant_text):
+            tts_text = self.strip_voice_command(assistant_text)
+            audio_path = self.render_voice(tts_text)
             tg.send_voice(chat_id, audio_path)
             return "voice", assistant_text
 
