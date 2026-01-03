@@ -1,3 +1,4 @@
+import os
 import requests
 import time
 
@@ -22,8 +23,23 @@ class TelegramBot:
             "chat_id": chat_id,
             "text": text,
             "disable_web_page_preview": disable_web_page_preview,
-            }
+        }
         r = requests.post(self.base_url + method, params=params, timeout=60)
+        r.raise_for_status()
+        return r.json()
+
+    def send_voice(self, chat_id, wav_path, caption=None):
+        method = "sendVoice"
+        if not os.path.exists(wav_path):
+            raise FileNotFoundError(f"Voice file not found: {wav_path}")
+
+        with open(wav_path, "rb") as f:
+            files = {"voice": f}
+            data = {"chat_id": chat_id}
+            if caption:
+                data["caption"] = caption
+            r = requests.post(self.base_url + method, data=data, files=files, timeout=120)
+
         r.raise_for_status()
         return r.json()
 
@@ -32,7 +48,6 @@ class TelegramBot:
         for upd in results:
             update_id = upd.get("update_id")
             msg = upd.get("message") or upd.get("edited_message")
-
             if not msg:
                 continue
 
