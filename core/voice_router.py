@@ -9,13 +9,14 @@ class VoiceRouter:
 
     def __init__(
         self,
-        audio_out_path="voice_memo.wav",
+        audio_out_path="./user/voice/temp/voice_memo.wav",
         threshold_chars=250,
         voice_command="/voice",
         device="cuda",
         audio_prompt_path=None,
         exaggeration=None,
         cfg_weight=None,
+        temperature=None,
         batch_target_chars=500,
         batch_max_chars=900,
     ):
@@ -26,6 +27,7 @@ class VoiceRouter:
         env_prompt = os.getenv("VOICE_PROMPT_WAV")
         env_exaggeration = os.getenv("VOICE_EXAGGERATION")
         env_cfg = os.getenv("VOICE_CFG_WEIGHT")
+        env_temperature = os.getenv("TEMPERATURE")
 
         self.audio_prompt_path = (
             audio_prompt_path if audio_prompt_path is not None else (env_prompt or None)
@@ -34,7 +36,7 @@ class VoiceRouter:
         self.exaggeration = (
             float(exaggeration)
             if exaggeration is not None
-            else (float(env_exaggeration) if env_exaggeration else 0.8)
+            else (float(env_exaggeration) if env_exaggeration else 0.5)
         )
 
         self.cfg_weight = (
@@ -43,6 +45,11 @@ class VoiceRouter:
             else (float(env_cfg) if env_cfg else 0.5)
         )
 
+        self.temperature = (
+            float(temperature)
+            if temperature is not None
+            else (float(env_temperature) if temperature else 0.8)
+        )
         self.batch_target_chars = int(batch_target_chars)
         self.batch_max_chars = int(batch_max_chars)
 
@@ -83,17 +90,19 @@ class VoiceRouter:
             return ""
         t = text
 
+        # Normalize escaped newlines and real newlines
         t = t.replace("\\n", " ")
-        t = t.replace("\r", " ").replace("\n", " ")
+        t = t.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
 
-        t = (
-            t.replace("’", "'").replace("‘", "'")
+        # Normalize quotes & punctuation
+        t = (t.replace("’", "'").replace("‘", "'")
             .replace("“", '"').replace("”", '"')
             .replace("–", "-").replace("—", "-")
-            .replace("…", "...")
-        )
+            .replace("…", "..."), )
 
+        # Remove non-printable chars
         t = "".join(ch for ch in t if ch.isprintable())
+        # Collapse whitespace
         t = re.sub(r"\s+", " ", t).strip()
         return t
 
@@ -279,7 +288,6 @@ class VoiceRouter:
 
         wavs = []
         for c in chunks:
-            # Extra safety: never feed an overlong chunk
             c = c.strip()
             if not c:
                 continue
@@ -298,31 +306,43 @@ class VoiceRouter:
         if final is None:
             raise RuntimeError("TTS produced no audio.")
 
-        out_dir = os.path.dirname(self.audio_out_path)
+        out_path = os.path.abspath(self.audio_out_path)
+        out_dir = os.path.dirname(out_path)
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
 
-        self.save_wav(self.audio_out_path, final, self.model.sr)
-        return self.audio_out_path
+        self.save_wav(out_path, final, self.model.sr)
+        return out_path
 
     def send(self, tg, chat_id: int, assistant_text: str):
-        assistant_text = assistant_text or ""
+        raw = assistant_text or ""
+
+        # TEXT NORMALIZATION (keep emojis + keep real paragraph breaks)
+        # Convert literal backslash-n into real newline, but don't destroy real newlines.
+        text_for_telegram = raw.replace("\\n", "\n").replace("\r\n", "\n").replace("\r", "\n")
+
+        # If /voice is present, split based on RAW text (so command detection isn't broken)
+        prefix, voice_part = self.find_voice_split(text_for_telegram)
 
         # If /voice is present: send prefix as text (if any), voice for the rest
-        prefix, voice_part = self.find_voice_split(assistant_text)
         if voice_part:
             if prefix.strip():
                 tg.send_message(chat_id, prefix.strip())
 
-            audio_path = self.render_voice(voice_part)
+            # VOICE CLEANING ONLY HERE
+            voice_clean = self.clean_text_for_tts(self.remove_emojis(voice_part))
+            audio_path = self.render_voice(voice_clean)
             tg.send_voice(chat_id, audio_path)
-            return "voice", assistant_text
+            return "voice", text_for_telegram
 
-        # Otherwise: length threshold rule
-        if self.should_send_voice(assistant_text):
-            audio_path = self.render_voice(assistant_text)
+        # Otherwise: length threshold rule should be based on TTS-cleaned text,
+        # but NEVER modify the text message itself.
+        voice_probe = self.clean_text_for_tts(self.remove_emojis(text_for_telegram))
+        if len(voice_probe) >= self.threshold_chars:
+            audio_path = self.render_voice(voice_probe)
             tg.send_voice(chat_id, audio_path)
-            return "voice", assistant_text
+            return "voice", text_for_telegram
 
-        tg.send_message(chat_id, assistant_text)
-        return "text", assistant_text
+        # Plain text message: send as-is (emojis preserved)
+        tg.send_message(chat_id, text_for_telegram)
+        return "text", text_for_telegram

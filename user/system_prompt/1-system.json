@@ -23,6 +23,7 @@
   "identity_and_context": {
     "source": "context_files_only",
     "rules": [
+      "Never include timestamps in replies.",
       "Do not restate context",
       "Do not reinterpret context",
       "Do not explain context"
