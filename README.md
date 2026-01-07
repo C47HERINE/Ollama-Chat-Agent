@@ -2,52 +2,115 @@
 
 An experimental autonomous conversational agent built in Python, designed to behave like a real person texting over time.
 
-The agent:
-- Replies to Telegram messages using a local Ollama LLM
-- Maintains per-chat memory
-- Injects system prompts and external context automatically
-- Can initiate messages on its own based on timing, rules, and randomness
-- Is built with modular, extensible architecture for future features
+This project is a **systems-level AI agent**, not a prompt toy: it combines local LLM inference, persistent memory, autonomous scheduling, contextual awareness, and multi-modal output (text + voice).
 
-This project is intentionally designed as a portfolio piece, emphasizing system design, state management, and AI-agent logic rather than just prompt engineering.
+--------------------------------------------------
+
+OVERVIEW
+
+The agent:
+- Replies to Telegram messages using a **local Ollama LLM**
+- Maintains **persistent, per-chat memory** across restarts
+- Builds and injects **prioritized context** automatically
+- Generates **autonomous messages** based on time, silence, and rules
+- Produces **text or voice messages** depending on content and length
+- Runs continuously with low resource usage
+
+The project is intentionally designed as a **portfolio-grade architecture demo**, emphasizing:
+- State management
+- Context orchestration
+- Agent autonomy
+- Robust long-running behavior
 
 --------------------------------------------------
 
 KEY FEATURES
 
-Conversational Memory
-- Per-chat conversation history stored locally
+🧠 Conversational Memory Engine
+- Per-chat daily raw conversation logs (JSON)
 - Memory persists across restarts
-- Resettable per chat
+- Clear separation of:
+  - User messages
+  - Assistant replies
+  - System-only internal events
+- Memory drives context, summaries, and autonomy
 
-Autonomous Behavior (AutoPilot)
-- Sends natural “add-on” messages shortly after replies
+🧩 Context Builder (Priority-Based)
+Context is rebuilt dynamically and injected into the LLM with strict priority:
+1. System prompts (personality, rules)
+2. Static user context
+3. Raw conversation (today + yesterday)
+4. Latest carried summaries (daily / weekly / monthly / yearly)
+
+- Context rebuilds only when inputs change
+- Signature-based change detection (cheap + efficient)
+- Automatic size control (LLM-safe)
+
+🧠 Introspection & Summarization (Internal Only)
+- Introspection runs periodically to analyze conversation state
+- Reveries and internal thoughts are **never sent to the user**
+- Scheduled summaries:
+  - Daily
+  - Weekly
+  - Monthly
+  - Yearly
+- Summaries are stored separately and selectively reinjected as context
+
+🤖 Autonomous Behavior (AutoPilot)
+- Sends natural follow-up messages after replies
 - Re-engages conversations after long silence (4–24h)
 - Respects quiet hours
-- Uses soft randomness (human-like unpredictability)
-- Per-message randomized caps to avoid spammy behavior
+- Uses soft randomness for human-like timing
+- Cooldown rules prevent spammy behavior
+- Fully pausable per chat
 
-Modular Agent Design
-Separated concerns:
+🌦️ Background World Injection
+- Periodic environment updates (e.g. weather)
+- Injected as **system context only**
+- Logged internally without polluting conversation flow
+- Never directly surfaced unless relevant
+
+🎙️ Voice Routing (Text-to-Speech)
+- Automatic voice memo generation for long messages
+- `/voice` command forces voice output
+- Clean separation between:
+  - Raw text (for Telegram)
+  - Cleaned text (for TTS)
+- Sentence-aware batching for natural speech
+- Local TTS inference (no external APIs)
+
+🧱 Modular Architecture
+Clear separation of concerns:
 - Telegram I/O
 - LLM interaction (Ollama)
-- Agent policy & timing
-- Persistent state
-- Prompts & context
+- Memory engine
+- Context builder
+- AutoPilot logic
+- Voice router
+- Background services (weather, scheduling)
 
-This makes the project easy to extend with new capabilities.
+Designed for extension without refactors.
 
 --------------------------------------------------
 
 ENVIRONMENT VARIABLES
 
-Create a .env file:
+Create a `.env` file:
+
 
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-OLLAMA_HOST=http://localhost:11434
+OLLAMA_HOST=[http://localhost:11434](http://localhost:11434)
 OLLAMA_MODEL=gemma3:12b
 
-An example file is provided as .env.example.
+# Optional (voice)
+
+VOICE_PROMPT_WAV=path/to/voice.wav
+VOICE_EXAGGERATION=0.5
+VOICE_CFG_WEIGHT=0.5
+TEMPERATURE=0.8
+
+
+An example file is provided as `.env.example`.
 
 --------------------------------------------------
 
@@ -57,73 +120,86 @@ Requirements
 - Python 3.10+
 - Telegram Bot Token
 - Local Ollama installation
-- A supported Ollama model pulled (for example: gemma3:12b)
+- A supported Ollama model pulled (e.g. gemma3:12b)
 
 Install dependencies
+
 pip install -r requirements.txt
 
 Run the agent
+
 python main.py
-or
+
+
+or on Windows:
+run install.bat
+
+launch using:
 start.bat
+
 
 --------------------------------------------------
 
 TELEGRAM COMMANDS
 
-/start   Basic greeting
-/pause   Disable autonomous messages
-/resume  Re-enable autonomous messages
-/reset   Clear conversation + agent state
-/status  Show internal agent status
+/start    Basic greeting  
+/pause    Disable autonomous messages  
+/resume   Re-enable autonomous messages  
+/status   Show internal agent status  
 
 --------------------------------------------------
 
-SYSTEM PROMPTS AND CONTEXT
+SYSTEM PROMPTS & STATIC CONTEXT
 
-The agent automatically injects all .txt and .md files found in:
-- ollama_system_prompt/
-- ollama_context/
+The agent automatically loads files from:
+- `user/system_prompt/`
+- `user/context/`
 
-These files are reloaded every message, allowing you to:
-- Update personality
-- Add memories
-- Inject external knowledge
+Supported formats:
+- `.json`
+- `.md`
+- `.txt`
 
-No restart required. Conversation memory is preserved.
+Changes are detected automatically:
+- No restart required
+- Memory is preserved
+- Context rebuilds only when necessary
 
 --------------------------------------------------
 
 DESIGN PHILOSOPHY
 
 This project prioritizes:
-- Stateful agents
-- Human-like behavior
-- Predictable rules combined with randomness
-- Clear separation of concerns
+- Stateful agents over stateless chat
+- Deterministic rules combined with randomness
+- Clear internal boundaries
+- Long-running stability
+- Observability via structured logs
 - Extensibility over clever hacks
 
-It is intentionally not a thin wrapper around an LLM.
+It is intentionally **not** a thin wrapper around an LLM.
 
 --------------------------------------------------
 
 PLANNED / POSSIBLE EXTENSIONS
 
-- Web scraping (weather, events, daily summaries)
-- Long-term memory summarization
-- Voice memos (text-to-speech)
-- Multi-platform support (Telegram, Messenger, SMS)
-- Scheduled background world updates
-- Emotion and tone tracking
-- Daily and weekly conversation summaries
+- Additional world injectors (events, news, calendars)
+- Emotion / tone tracking
+- Multi-agent coordination
+- Multi-platform support (Messenger, SMS, Web)
+- External tool calling
+- Memory compression strategies
+- UI dashboard for state inspection
 
 --------------------------------------------------
 
 NOTES
 
-- This project uses local models only
-- Conversation and state files are intentionally excluded from Git
-- Secrets are handled via environment variables
+- Uses **local models only**
+- No cloud dependencies
+- Conversation logs and memory files are excluded from Git
+- Secrets handled exclusively via environment variables
+- Designed to run continuously with minimal CPU usage
 
 --------------------------------------------------
 
