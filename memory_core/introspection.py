@@ -4,7 +4,7 @@ from memory_core.reverie import ReveriePicker
 
 
 class IntrospectionEngine:
-    """Generates the required introspection block and logs it into daily JSON (never sent)."""
+    """Generates a private introspection output and logs ONLY the output into daily JSON."""
 
     def __init__(self, paths, state, raw_logger, timeutils, context_builder):
         self.paths = paths
@@ -52,32 +52,20 @@ class IntrospectionEngine:
     def build_block(self, status: str, last_topic_summary: str) -> str:
         now_str = self.t.local_dt().strftime("%H:%M:%S")
 
-        core_log(
-            "INTRO_BUILD_START",
-            local_time=now_str,
-            status=status,
-            last_topic_summary_preview=(last_topic_summary[:120] if last_topic_summary else ""),
-            last_topic_summary_len=len(last_topic_summary or ""),
-        )
-
         reverie = self.reveries.reverie_block()
-
-        core_log(
-            "INTRO_BUILD_REVERIE_READY",
-            reverie_present=(reverie != "REVERIE: none available"),
-            reverie_chars=len(reverie or ""),
-        )
 
         lines = [
             reverie,
             "",
-            "--- INTROSPECTION ---",
+            "INTROSPECTION MODE OVERRIDE:\n"
+            "- This is a private journal-style introspection task.\n"
+            "- Do NOT roleplay normal chat. Do NOT greet. Do NOT ask the user questions.\n"
+            "- Output only the introspection sections.\n"
+            "- Keep it grounded in the provided context/history for the current conversation.\n"
+            "--- INTROSPECTION PROMPT ---",
             f"time: {now_str}",
-            "note: private, subjective reflection during silence; incomplete and non-authoritative",
-            "",
-            "What Stayed With Me:",
-            "- one concrete moment, phrase, or exchange from earlier that keeps resurfacing",
-            "- something small that felt heavier or more meaningful than expected",
+            f"status: {status}",
+            f"last_topic: {last_topic_summary}",
             "",
             "What I Didn’t Fully Resolve:",
             "- a question, idea, or tension that didn’t get closed",
@@ -93,65 +81,52 @@ class IntrospectionEngine:
             "",
             "--- END INTROSPECTION ---",
         ]
+        return "\n".join(lines).strip()
 
-        block = "\n".join(lines)
+    def run_if_needed(self, llm, chat_id: int, today_key: str, yesterday_key: str, force: bool = False):
+        core_log("INTRO_RUN_START", chat_id=chat_id, today_key=today_key, yesterday_key=yesterday_key, force=force)
 
-        core_log("INTRO_BUILD_DONE", block_chars=len(block), block_lines=len(lines))
-        return block
-
-    def run_if_needed(self, chat_id: int, today_key: str, yesterday_key: str):
-        # yesterday_key is currently unused here, but kept for signature stability
-        core_log("INTRO_RUN_START", chat_id=chat_id, today_key=today_key, yesterday_key=yesterday_key)
-
-        if not self.should_introspect(chat_id):
+        if (not force) and (not self.should_introspect(chat_id)):
             core_log("INTRO_RUN_SKIP", chat_id=chat_id, reason="not_eligible")
             return ""
 
         c = self.state.chat(chat_id)
         last_user_text = (c.get("last_user_message_text") or "").strip()
         status = "unresolved" if last_user_text else "paused"
-        last_topic_summary = (
-            (last_user_text[:120] + "…") if len(last_user_text) > 120 else (last_user_text or "—")
-        )
+        last_topic_summary = (last_user_text[:120] + "…") if len(last_user_text) > 120 else (last_user_text or "—")
 
-        core_log(
-            "INTRO_RUN_ELIGIBLE",
-            chat_id=chat_id,
-            status=status,
-            last_user_text_len=len(last_user_text),
-            last_user_ms=int(c.get("last_user_message_ms", 0)),
-        )
+        prompt = self.build_block(status=status, last_topic_summary=last_topic_summary)
 
-        block = self.build_block(status=status, last_topic_summary=last_topic_summary)
+        # --- CRITICAL CHANGE ---
+        # Build full-context messages, then add a late system override so the persona doesn't hijack introspection.
+        llm.use_chat(chat_id)
 
-        # Log to daily JSON using the same schema
+        messages = llm.build_messages(prompt)  # includes injected ctx + history + (user: prompt)
+
+        override = {"role": "system", "content": ""}
+
+        # Insert override right before the final user message (the prompt)
+        if messages and messages[-1].get("role") == "user":
+            messages.insert(len(messages) - 1, override)
+        else:
+            messages.append(override)
+            messages.append({"role": "user", "content": prompt})
+
+        out = (llm.stream_chat(messages) or "").strip()
+        if not out:
+            core_log("INTRO_LLM_EMPTY", chat_id=chat_id)
+            return ""
+
         time_str = self.t.local_dt().strftime("%Y-%m-%d %H:%M:%S")
         self.raw_logger.append(
             today_key,
-            {
-                "role": "system",
-                "time": time_str,
-                "content": block,
-            },
+            {"role": "system", "time": time_str, "content": out},
         )
 
-        core_log(
-            "INTRO_LOGGED",
-            chat_id=chat_id,
-            date_key=today_key,
-            time=time_str,
-            role="system",
-            content_chars=len(block),
-        )
+        core_log("INTRO_LOGGED", chat_id=chat_id, date_key=today_key, time=time_str, content_chars=len(out))
 
-        # Mark done for this silence window
         last_user_ms = int(c.get("last_user_message_ms", 0))
         self.state.mark_introspection_done(chat_id, last_user_ms)
+        core_log("INTRO_MARK_DONE", chat_id=chat_id, last_user_ms=last_user_ms)
 
-        core_log(
-            "INTRO_MARK_DONE",
-            chat_id=chat_id,
-            last_user_ms=last_user_ms,
-        )
-
-        return block
+        return out

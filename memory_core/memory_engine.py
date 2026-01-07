@@ -1,9 +1,6 @@
-import os
-import re
+import os, re
 from typing import Iterable, Optional
-
 from core.logger import core_log  # <-- event logger
-
 from memory_core.fs import MemoryPaths
 from memory_core.state import StateManager
 from memory_core.raw_logger import RawLogger
@@ -204,7 +201,7 @@ class MemoryEngine:
         introspected = 0
         for chat_id in known_list:
             try:
-                block = self.introspection.run_if_needed(chat_id, today, yesterday)
+                block = self.introspection.run_if_needed(llm, chat_id, today, yesterday)
             except Exception as e:
                 core_log("MEMORY_INTROSPECTION_FAIL", chat_id=chat_id, error=str(e))
                 continue
@@ -238,7 +235,7 @@ class MemoryEngine:
 
             should_rebuild = (self._context_dirty or sig_changed)
 
-            # optional throttle so you never rebuild too frequently
+            # optional throttle so never rebuild too frequently
             if should_rebuild and since_last < self._min_rebuild_interval_s:
                 core_log("CTX_SKIP", reason="throttled", since_last_s=round(since_last, 2),
                          dirty=self._context_dirty, sig_changed=sig_changed)
