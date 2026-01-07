@@ -45,7 +45,7 @@ class IntrospectionEngine:
             last_user_ms=last_user,
             silence_ms=int(silence_ms),
             delta_ms=delta,
-        )
+            )
 
         return eligible
 
