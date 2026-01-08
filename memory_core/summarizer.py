@@ -13,7 +13,7 @@ class Summarizer:
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(text.rstrip() + "\n")
 
-    def exists(self, path: str) -> bool:
+    def file_exists(self, path: str) -> bool:
         return os.path.exists(path)
 
     def read_daily_raw_as_text(self, raw_path: str) -> str:
@@ -139,7 +139,7 @@ class Summarizer:
 
     def daily(self, llm, chat_id: int, day_key: str, raw_path: str, out_path: str) -> str:
         """Create daily summary for a specific day_key, from its daily_raw file."""
-        if self.exists(out_path):
+        if self.file_exists(out_path):
             return ""
         if not os.path.exists(raw_path):
             return ""
@@ -156,7 +156,7 @@ class Summarizer:
     def weekly_range(self, llm, chat_id: int, start_key: str, end_key: str,
                      daily_paths: List[str], out_path: str) -> str:
         """Build a weekly summary from explicit daily summary files."""
-        if self.exists(out_path):
+        if self.file_exists(out_path):
             return ""
         if not daily_paths:
             return ""
@@ -176,7 +176,7 @@ class Summarizer:
     def monthly_range(self, llm, chat_id: int, year: int, month: int,
                       daily_paths: List[str], out_path: str) -> str:
         """Build a monthly summary from explicit daily summary files within that month."""
-        if self.exists(out_path):
+        if self.file_exists(out_path):
             return ""
         if not daily_paths:
             return ""
@@ -195,7 +195,7 @@ class Summarizer:
 
     def yearly_range(self, llm, chat_id: int, year: int, monthly_paths: List[str], out_path: str) -> str:
         """Build a yearly summary from explicit monthly summary files within that year."""
-        if self.exists(out_path):
+        if self.file_exists(out_path):
             return ""
         if not monthly_paths:
             return ""

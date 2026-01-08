@@ -34,11 +34,3 @@ class MemoryPaths:
         ]
         for d in dirs:
             os.makedirs(d, exist_ok=True)
-
-    def daily_raw_path(self, date_key: str) -> str:
-        """Daily raw conversation file in JSON list format."""
-        return os.path.join(self.daily_raw_dir, f"{date_key}.json")
-
-    def runtime_injection_path(self) -> str:
-        """Single overwritten file used as runtime context injection (optional)."""
-        return os.path.join(self.context_dir, "runtime_injected.md")

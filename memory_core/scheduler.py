@@ -1,10 +1,9 @@
-# memory_core/scheduler.py
 import os
 import re
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 
-from core.logger import core_log  # event logger
+from core.logger import core_log
 from memory_core.summarizer import Summarizer
 
 
@@ -277,17 +276,6 @@ class SummaryScheduler:
         plan["monthly"] = [self._plan_monthly_task(today, weekday)]
         plan["yearly"] = [self._plan_yearly_task(today, weekday)]
 
-        core_log(
-            "SCHED_PLAN_BUILT",
-            local_dt=dt.strftime("%Y-%m-%d %H:%M:%S"),
-            hhmm=f"{dt.hour:02d}:{dt.minute:02d}",
-            weekday=weekday,
-            today=_date_key(today),
-            daily_planned=len(plan["daily"]),
-            weekly_planned=1,
-            monthly_planned=1,
-            yearly_planned=1,
-        )
         return plan
 
     # -------------------------
@@ -347,20 +335,8 @@ class SummaryScheduler:
           and these don't need minute precision now. (You can re-add gates if you want.)
         """
         created: List[str] = []
-
         dt = self.t.local_dt()
         hhmm = (dt.hour, dt.minute)
-
-        core_log(
-            "SCHED_TICK",
-            local_dt=dt.strftime("%Y-%m-%d %H:%M:%S"),
-            hhmm=f"{dt.hour:02d}:{dt.minute:02d}",
-            weekday=dt.weekday(),
-            day=dt.day,
-            month=dt.month,
-            chat_id_for_llm=chat_id_for_llm,
-        )
-
         plan = self.build_plan()
 
         # Time gate: daily only after 03:00
@@ -398,13 +374,6 @@ class SummaryScheduler:
         created: List[str] = []
         dt = self.t.local_dt()
         today = dt.date()
-
-        core_log(
-            "MEM_INTEGRITY_START",
-            local_dt=dt.strftime("%Y-%m-%d %H:%M:%S"),
-            today=_date_key(today),
-            chat_id_for_llm=chat_id_for_llm,
-        )
 
         plan = self.build_plan()
 

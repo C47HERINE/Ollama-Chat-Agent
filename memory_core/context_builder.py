@@ -30,14 +30,6 @@ class ContextBuilder:
         return "\n\n".join(p for p in parts if p), files
 
     def build(self, today_key: str, yesterday_key: str) -> str:
-        core_log(
-            "CTX_BUILD_START",
-            today=today_key,
-            yesterday=yesterday_key,
-            max_chars=self.max_chars,
-            mode="no_trim_no_drop",
-            )
-
         blocks: List[Tuple[str, str]] = []
 
         # 1) RAW CONTEXT first (highest priority): D0 then D1 (full files)
@@ -45,15 +37,7 @@ class ContextBuilder:
         d1_path = os.path.join(self.paths.daily_raw_dir, f"{yesterday_key}.json")
         d0 = read_text(d0_path).strip() if os.path.exists(d0_path) else ""
         d1 = read_text(d1_path).strip() if os.path.exists(d1_path) else ""
-        core_log(
-            "CTX_RAW_FILES",
-            d0_path=d0_path,
-            d0_exists=os.path.exists(d0_path),
-            d0_chars=len(d0),
-            d1_path=d1_path,
-            d1_exists=os.path.exists(d1_path),
-            d1_chars=len(d1),
-            )
+
         if d0:
             blocks.append(("RAW CONTEXT (D0)", d0))
         if d1:
@@ -63,14 +47,7 @@ class ContextBuilder:
         system_text, system_files = self.read_all_files_as_text(
             self.paths.system_prompt_dir, exts=(".md", ".txt", ".json")
             )
-        core_log(
-            "CTX_READ_FILES",
-            kind="system_prompt",
-            folder=self.paths.system_prompt_dir,
-            count=len(system_files),
-            files=system_files,
-            chars=len(system_text),
-            )
+
         if system_text.strip():
             blocks.append(("SYSTEM PROMPT", system_text.strip()))
 
@@ -78,14 +55,7 @@ class ContextBuilder:
         static_text, static_files = self.read_all_files_as_text(
             self.paths.context_dir, exts=(".md", ".txt", ".json")
             )
-        core_log(
-            "CTX_READ_FILES",
-            kind="static_context",
-            folder=self.paths.context_dir,
-            count=len(static_files),
-            files=static_files,
-            chars=len(static_text),
-            )
+
         if static_text.strip():
             blocks.append(("STATIC CONTEXT", static_text.strip()))
 
@@ -127,10 +97,4 @@ class ContextBuilder:
                 continue
             formatted.append(f"## {title}\n{txt}\n")
         joined = "\n".join(formatted).strip()
-        core_log(
-            "CTX_BUILD_DONE",
-            titles=[t for t, _ in blocks],
-            total_chars=len(joined),
-            note="no_trim_no_drop (ollama_may_truncate_internally)",
-            )
         return joined

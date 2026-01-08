@@ -1,4 +1,3 @@
-from core.logger import core_log
 from dotenv import load_dotenv
 import core.timeutils as core_time
 import os, json, requests

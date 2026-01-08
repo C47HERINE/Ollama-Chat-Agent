@@ -1,13 +1,9 @@
 from datetime import datetime, timedelta, timezone
-import os, time
+import time
 
 # Force local offset correction on Windows if needed
 LOCAL_OFFSET = -time.timezone if (time.localtime().tm_isdst == 0) else -time.altzone
 LOCAL_TZ = timezone(timedelta(seconds=LOCAL_OFFSET))
-
-def tz_name() -> str:
-    """Return TZ from env as a raw string (no validation)."""
-    return (os.getenv("TZ") or "").strip()
 
 def now_ms() -> int:
     """Return current epoch time in milliseconds."""
@@ -24,10 +20,6 @@ def local_dt() -> datetime:
 def local_dt_from_ms(ms: int) -> datetime:
     """Convert epoch ms to OS-local datetime (timezone-aware)."""
     return datetime.fromtimestamp(ms / 1000, LOCAL_TZ)
-
-def local_hour() -> int:
-    """Return OS-local hour."""
-    return local_dt().hour
 
 def weekday_label() -> str:
     """Return weekday/weekend label from OS-local date."""
@@ -46,13 +38,6 @@ def time_of_day_label(hour: int) -> str:
     if 17 <= hour < 22:
         return "evening"
     return "night"
-
-def fmt_local_ms(ms: int) -> str:
-    """Format epoch ms into OS-local timestamp string."""
-    if not ms:
-        return "—"
-    dt = local_dt_from_ms(ms)
-    return dt.strftime("%Y-%m-%d %H:%M:%S")
 
 def today_key_local() -> str:
     """Return YYYY-MM-DD using OS-local date."""

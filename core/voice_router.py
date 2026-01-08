@@ -119,14 +119,6 @@ class VoiceRouter:
         voice_part = text[idx + len(self.voice_command):].strip()
         return prefix, voice_part
 
-    def should_send_voice(self, text: str) -> bool:
-        if not text:
-            return False
-        if self.voice_command in text:
-            return True
-        cleaned = self.clean_text_for_tts(self.remove_emojis(text))
-        return len(cleaned) >= self.threshold_chars
-
     def split_into_sentence_chunks(self, text: str):
         """Split into ~500-char chunks, cutting on sentence boundaries and never exceeding batch_max_chars."""
         t = self.clean_text_for_tts(text)
