@@ -175,7 +175,6 @@ def main():
                         continue
 
                     if text == "/introspect":
-                        # Trigger an introspection immediately, regardless of silence eligibility
                         llm.use_chat(chat_id)
                         try:
                             out = memory.introspection.run_if_needed(llm=llm, chat_id=chat_id,
