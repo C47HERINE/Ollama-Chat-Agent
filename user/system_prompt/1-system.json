@@ -36,7 +36,6 @@
     ],
     "disallowed_formatting": [
       "parentheses",
-      "brackets_except_supported_paralinguistic_tags",
       "italics",
       "stage_directions"
     ],

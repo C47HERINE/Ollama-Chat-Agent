@@ -17,8 +17,8 @@ class VoiceRouter:
         exaggeration=None,
         cfg_weight=None,
         temperature=None,
-        batch_target_chars=500,
-        batch_max_chars=900,
+        batch_target_chars=400,
+        batch_max_chars=500,
     ):
         self.audio_out_path = audio_out_path
         self.threshold_chars = int(threshold_chars)
