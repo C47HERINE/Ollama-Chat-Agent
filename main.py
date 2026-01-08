@@ -175,11 +175,10 @@ def main():
                         continue
 
                     if text == "/introspect":
-                        # Trigger an introspection immediately, regardless of silence eligibility
                         llm.use_chat(chat_id)
                         try:
                             out = memory.introspection.run_if_needed(llm=llm, chat_id=chat_id,
-                                    today_key=memory.today_key(), yesterday_key=memory.yesterday_key(), force=True)
+                                    today_key=memory.today_key(), force=True)
                             if out:
                                 reply = "Introspection captured (private)."
                             else:
@@ -187,7 +186,6 @@ def main():
                         except Exception as e:
                             reply = f"Introspection failed: {e}"
                         tg.send_message(chat_id, reply)
-                        core_log("CMD", chat_id=chat_id, name="introspect")
                         continue
 
                     # Normal inbound
