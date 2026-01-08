@@ -302,6 +302,7 @@ class VoiceRouter:
                 audio_prompt_path=self.audio_prompt_path,
                 exaggeration=self.exaggeration,
                 cfg_weight=self.cfg_weight,
+                temperature=self.temperature
             )
             wavs.append(wav)
 
