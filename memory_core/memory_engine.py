@@ -201,7 +201,7 @@ class MemoryEngine:
         introspected = 0
         for chat_id in known_list:
             try:
-                block = self.introspection.run_if_needed(llm, chat_id, today, yesterday)
+                block = self.introspection.run_if_needed(llm, chat_id, today)
             except Exception as e:
                 core_log("MEMORY_INTROSPECTION_FAIL", chat_id=chat_id, error=str(e))
                 continue
