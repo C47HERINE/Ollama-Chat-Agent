@@ -186,7 +186,6 @@ def main():
                         except Exception as e:
                             reply = f"Introspection failed: {e}"
                         tg.send_message(chat_id, reply)
-                        core_log("CMD", chat_id=chat_id, name="introspect")
                         continue
 
                     # Normal inbound
