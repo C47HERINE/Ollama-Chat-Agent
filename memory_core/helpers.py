@@ -44,5 +44,5 @@ def render_chat_as_text(items) -> str:
         role = str(it.get("role", "")).strip()
         content = str(it.get("content", "")).strip()
         if role and content:
-            lines.append(f"{role}: {content}")
+            lines.append(f"({role}) {content}")
     return "\n".join(lines).strip()
