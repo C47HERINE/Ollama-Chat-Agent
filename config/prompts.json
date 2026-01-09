@@ -1,0 +1,13 @@
+{
+  "templates": {
+    "l0_to_l1": "You are summarizing a chat chunk.\nRules:\n- Output bullet points only.\n- Keep high-signal: decisions, goals, constraints, open threads.\n- No timestamps.\n- Preserve role labels as written.\n\nCHAT CHUNK:\n{chunk}\n\nOUTPUT:",
+    "merge_two": "Merge two recaps into one higher-level recap.\nRules:\n- Bullet points only.\n- Keep only durable facts, ongoing goals, open threads.\n- Remove duplicates.\n\nRECAP A:\n{a}\n\nRECAP B:\n{b}\n\nOUTPUT:",
+    "l3_to_l4_master": "Update the MASTER summary using two L3 recaps.\nRules:\n- MASTER has priority: keep existing structure and content unless clearly outdated.\n- Integrate only truly important durable info from the two L3 recaps.\n- Bullet points only.\n- Keep it concise.\n\nCURRENT MASTER:\n{master}\n\nL3 A:\n{a}\n\nL3 B:\n{b}\n\nUPDATED MASTER:"
+  },
+  "limits": {
+    "l1_max_bullets": 10,
+    "l2_max_bullets": 8,
+    "l3_max_bullets": 6,
+    "l4_max_bullets": 12
+  }
+}

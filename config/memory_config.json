@@ -1,0 +1,7 @@
+{
+  "l0": { "max_msgs": 30, "buffer_msgs": 10, "summary_msgs": 20 },
+  "levels": { "max_files": 3 },
+  "jobs": { "max_per_assistant_msg": 1 },
+  "injection_order": ["low", "user_context", "l4", "l3", "l2", "l1", "l0", "system"],
+  "separation_line": "========================================================================"
+}
