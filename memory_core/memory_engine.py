@@ -51,7 +51,7 @@ class MemoryEngine:
         return self.date_key(self.t.local_dt_from_ms(y_ms))
 
     # -------------------------
-    # Content sanitization (NO KIND TAGS IN RAW)
+    # Content sanitization
     # -------------------------
     def _strip_leading_kind_tag(self, text: str) -> str:
         if not text:

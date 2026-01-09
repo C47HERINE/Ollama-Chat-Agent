@@ -1,9 +1,6 @@
-import os
-import re
+import os, re
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-
-from core.logger import core_log
 from memory_core.summarizer import Summarizer
 
 
@@ -344,55 +341,16 @@ class SummaryScheduler:
 
         # Execute daily tasks (if allowed)
         for task in plan["daily"]:
-            core_log("SCHED_DAILY_TASK", **task, allow_daily=allow_daily)
             if not allow_daily:
                 continue
             p = self._execute_task(llm, chat_id_for_llm, task)
             if p:
                 created.append(p)
-                core_log("SCHED_DAILY_CREATED", path=p)
 
         # Execute weekly/monthly/yearly tasks (only if eligible=true; they self-enforce Thursday)
         for bucket in ("weekly", "monthly", "yearly"):
             for task in plan[bucket]:
-                core_log(f"SCHED_{bucket.upper()}_TASK", **task)
                 p = self._execute_task(llm, chat_id_for_llm, task)
                 if p:
                     created.append(p)
-                    core_log(f"SCHED_{bucket.upper()}_CREATED", path=p)
-
-        core_log("SCHED_DONE", created_count=len(created), created_paths=created)
-        return created
-
-    def run_integrity_check_on_startup(self, llm, chat_id_for_llm: int) -> List[str]:
-        """
-        Startup integrity checker:
-        - Immediately generates any missing summaries that SHOULD exist based on daily_raw vs summaries.
-        - Still respects rule: never summarize yesterday or today.
-        - Ignores the 03:00 time gate.
-        """
-        created: List[str] = []
-        dt = self.t.local_dt()
-        today = dt.date()
-
-        plan = self.build_plan()
-
-        # Execute all eligible daily tasks immediately (no 03:00 gate)
-        for task in plan["daily"]:
-            core_log("MEM_INTEGRITY_DAILY_TASK", **task)
-            p = self._execute_task(llm, chat_id_for_llm, task)
-            if p:
-                created.append(p)
-                core_log("MEM_INTEGRITY_DAILY_CREATED", path=p)
-
-        # For higher-level summaries: we ALSO allow startup creation if eligible (still Thursday-only unless you change it).
-        for bucket in ("weekly", "monthly", "yearly"):
-            for task in plan[bucket]:
-                core_log(f"MEM_INTEGRITY_{bucket.upper()}_TASK", **task)
-                p = self._execute_task(llm, chat_id_for_llm, task)
-                if p:
-                    created.append(p)
-                    core_log(f"MEM_INTEGRITY_{bucket.upper()}_CREATED", path=p)
-
-        core_log("MEM_INTEGRITY_DONE", created_count=len(created), created_paths=created)
         return created

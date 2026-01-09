@@ -6,11 +6,8 @@ from typing import Any, Dict, List
 class RawLogger:
     """
     Append-only daily JSON logger.
-
     File format: a JSON array of objects:
       { "role": str, "time": "YYYY-MM-DD HH:MM:SS", "content": str }
-
-    Nothing is deleted automatically.
     """
 
     def __init__(self, daily_raw_dir: str):
@@ -41,7 +38,6 @@ class RawLogger:
         """
         Entry MUST contain:
           role, time, content
-        (and should not contain other keys; keep it consistent with the old format)
         """
         path = self.daily_path(date_key)
         lst = self._load_list(path)
@@ -51,11 +47,9 @@ class RawLogger:
         t = (entry.get("time") or "").strip()
         content = entry.get("content")
         content = "" if content is None else str(content)
-
         lst.append({
             "role": role,
             "time": t,
             "content": content,
         })
-
         self._atomic_write(path, lst)
