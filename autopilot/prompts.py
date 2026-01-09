@@ -17,9 +17,9 @@ def build_prompt(kind):
     if kind == "addon":
         return (
             meta +
-            "Task: Write ONE short add-on message as if you just remembered something.\n"
+            "Task: Write ONE short add-on message.\n"
             "Rules: Keep it casual, natural. Do not sound formal. Do not over-explain.\n"
-            "Avoid starting a whole new topic unless it's a light continuation.\n"
+            "Avoid starting a new topic unless it's a light continuation.\n"
         )
 
     if kind == "starter":
