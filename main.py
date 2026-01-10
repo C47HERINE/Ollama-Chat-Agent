@@ -213,8 +213,14 @@ def main():
         except requests.exceptions.RequestException as e:
             print(f"[NET_ERROR] {e}")
             time.sleep(5)
+
         except Exception as e:
-            print(f"[UNEXPECTED_ERROR] {e}")
-            time.sleep(2)
+            import traceback
+            print("========== [UNEXPECTED_ERROR] ==========")
+            print(f"Type: {type(e).__name__}")
+            print(f"Repr: {repr(e)}")
+            traceback.print_exc()
+            print("========================================")
+        time.sleep(2)
 
 main()
