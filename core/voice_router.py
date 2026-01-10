@@ -14,8 +14,8 @@ class VoiceRouter:
         exaggeration=None,
         cfg_weight=None,
         temperature=None,
-        batch_target_chars=250,
-        batch_max_chars=500,
+        batch_target_chars=300,
+        batch_max_chars=600,
         ):
 
         env_prompt = os.getenv("VOICE_PROMPT_WAV")
