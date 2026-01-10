@@ -3,6 +3,7 @@ from core.ollama_chat import OllamaChatbot
 from core.telegram_bot import TelegramBot
 from core.voice_router import VoiceRouter
 from memory_core.memory_manager import MemoryManager
+from core.sanitize import strip_role_prefixes
 from dotenv import load_dotenv
 import os, time, requests, json
 
@@ -83,20 +84,20 @@ def main():
         mem = get_mem(telegram_chat_id)
 
         # Make sure cache is fresh enough for generation (no logging).
-        # (Usually it's fresh already, but this is cheap and safe.)
         st = mem.state_store.load()
         mem.builder.update_levels(st)
         mem.builder.update_l0(mem.conv.read_all())
         ctx = mem.cache.render(order=mem.config["injection_order"])
 
-        return llm.ask(prompt_text, stream_to_console=False, injected_ctx=ctx)
+        out = llm.ask(prompt_text, stream_to_console=False, injected_ctx=ctx)
+        return strip_role_prefixes(out or "")
 
     def send_fn(telegram_chat_id, text_to_send):
         """
         AutoPilot uses this to send autonomous messages.
         We DO log the outbound assistant message into L0, then compact once after send.
         """
-        text_to_send = (text_to_send or "").strip()
+        text_to_send = strip_role_prefixes((text_to_send or "").strip())
         if not text_to_send:
             return
 
@@ -107,6 +108,7 @@ def main():
 
         # send to telegram
         kind, sent_text = voice.send(tg, telegram_chat_id, text_to_send)
+        sent_text = strip_role_prefixes(sent_text or "")
 
         # tell autopilot we sent something
         autopilot.observe_outbound(
@@ -140,7 +142,7 @@ def main():
 
                     # ---- Commands (minimal) ----
                     if text == "/start":
-                        reply = f"Hi {user_first}! I'm online."
+                        reply = strip_role_prefixes(f"Hi {user_first}! I'm online.")
                         tg.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
 
@@ -152,7 +154,7 @@ def main():
                         st = autopilot.load_state(chat_id)
                         st["paused"] = True
                         autopilot.save_state(chat_id, st)
-                        reply = "Paused. I won't initiate messages here."
+                        reply = strip_role_prefixes("Paused. I won't initiate messages here.")
                         tg.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
 
@@ -164,7 +166,7 @@ def main():
                         st = autopilot.load_state(chat_id)
                         st["paused"] = False
                         autopilot.save_state(chat_id, st)
-                        reply = "Resumed. I may initiate messages again."
+                        reply = strip_role_prefixes("Resumed. I may initiate messages again.")
                         tg.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
 
@@ -173,7 +175,7 @@ def main():
                         continue
 
                     if text == "/status":
-                        reply = autopilot.format_status(chat_id)
+                        reply = strip_role_prefixes(autopilot.format_status(chat_id) or "")
                         tg.send_message(chat_id, reply)
 
                         mem.on_message("assistant", reply, kind="command_status")
@@ -189,13 +191,15 @@ def main():
                     # 2) ask model with injected context
                     llm.use_chat(chat_id)
                     reply = (llm.ask(text, stream_to_console=False, injected_ctx=ctx) or "").strip()
+                    reply = strip_role_prefixes(reply)
 
                     if reply:
-                        # 3) log outbound assistant reply
+                        # 3) log outbound assistant reply (sanitized)
                         mem.on_message("assistant", reply, kind="reply")
 
-                        # 4) send reply
+                        # 4) send reply (sanitized)
                         kind, sent_text = voice.send(tg, chat_id, reply)
+                        sent_text = strip_role_prefixes(sent_text or "")
 
                         # 5) autopilot observes outbound
                         autopilot.observe_outbound(chat_id, sent_text, cooldown_minutes=1, allow_addon=True)
