@@ -205,14 +205,10 @@ def main():
             time.sleep(5)
         except Exception as e:
 <<<<<<< HEAD
-<<<<<<< HEAD
             core_log("UNEXPECTED_ERROR", error=str(e))
 =======
             print(f"[UNEXPECTED_ERROR] {e}")
 >>>>>>> parent of 752ce09 (oca-17 fix prompt config files argument and updated prompts)
-=======
-            core_log("UNEXPECTED_ERROR", error=str(e))
->>>>>>> parent of 42834ba (Merge pull request #1 from C47HERINE/oca-17-json-context-fix)
             time.sleep(2)
 
 main()
