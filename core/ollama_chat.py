@@ -1,17 +1,14 @@
 import json
 import os
 import requests
-from dotenv import load_dotenv
-
-load_dotenv()
 
 class OllamaChatbot:
     """Chat wrapper for Ollama."""
-    def __init__(self, memory):
-        self.memory = memory
+    def __init__(self):
         self._chat_id = None
         self.model = os.getenv("OLLAMA_MODEL") or ""
         self.host = (os.getenv("OLLAMA_HOST") or "").rstrip("/")
+
         if not self.model:
             raise RuntimeError("Missing required env: OLLAMA_MODEL")
         if not self.host:
@@ -23,10 +20,9 @@ class OllamaChatbot:
     def use_chat(self, chat_id: int):
         self._chat_id = chat_id
 
-    def build_messages(self, user_text: str):
-        injected_ctx = self.memory.build_context_text() or ""
+    def build_messages(self, user_text: str, injected_ctx: str = ""):
         messages = []
-        if injected_ctx.strip():
+        if (injected_ctx or "").strip():
             messages.append({"role": "system", "content": injected_ctx})
         messages.append({"role": "user", "content": (user_text or "")})
         return messages
@@ -36,6 +32,7 @@ class OllamaChatbot:
         payload = {"model": self.model, "messages": messages, "stream": True}
         r = requests.post(url, json=payload, stream=True, timeout=180)
         r.raise_for_status()
+
         full_text = ""
         for line in r.iter_lines(decode_unicode=True):
             if not line:
@@ -44,22 +41,27 @@ class OllamaChatbot:
                 chunk = json.loads(line)
             except json.JSONDecodeError:
                 continue
+
             msg = chunk.get("message") or {}
             token = msg.get("content") or ""
             if token:
                 full_text += token
                 if on_token:
                     on_token(token)
+
             if chunk.get("done") is True:
                 break
+
         return full_text
 
-    def ask(self, user_text: str, stream_to_console: bool = True) -> str:
-        messages = self.build_messages(user_text)
+    def ask(self, user_text: str, stream_to_console: bool = True, injected_ctx: str = "") -> str:
+        messages = self.build_messages(user_text, injected_ctx=injected_ctx)
+
         if stream_to_console:
             print("Assistant: ", end="", flush=True)
             assistant_text = self.stream_chat(messages, on_token=lambda c: print(c, end="", flush=True))
             print()
         else:
             assistant_text = self.stream_chat(messages)
+
         return (assistant_text or "").strip()
