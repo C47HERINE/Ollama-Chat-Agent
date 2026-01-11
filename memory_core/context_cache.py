@@ -24,7 +24,14 @@ class ContextCache:
         d["sections"][section_id] = {"title": title, "text": (text or "").strip()}
         self.save(d)
 
-    def render(self, order: list) -> str:
+    def get_section_text(self, section_id: str) -> str:
+        d = self.load()
+        sec = (d.get("sections") or {}).get(section_id) or {}
+        return (sec.get("text") or "").strip()
+
+
+    def render_string(self, order: list) -> str:
+        """Render sections in `order` to a single string (no file write)."""
         d = self.load()
         sections = d.get("sections", {}) if isinstance(d.get("sections", {}), dict) else {}
 
@@ -39,6 +46,10 @@ class ContextCache:
                 continue
             parts.append(f"## {title}\n{text}\n{self.sep_line}\n")
 
-        out = "\n".join(parts).strip()
+        return "\n".join(parts).strip()
+
+    def render(self, order: list) -> str:
+        """Render + write to out_txt_path (your current behavior)."""
+        out = self.render_string(order)
         write_text(self.out_txt_path, out)
         return out
