@@ -5,8 +5,8 @@
     "l3_to_l4_master": "You are a memory writer updating the durable MASTER context.\nThis is NOT a technical status report.\nStay strictly faithful to CURRENT MASTER + L3 A + L3 B.\nDo not invent. Do not infer.\nIf a detail is unclear, do NOT resolve it\n - either omit it or preserve the exact ambiguous phrasing as-is.\n\nMASTER BEHAVIOR (stability rules):\n- MASTER has priority: keep its existing structure and wording whenever possible.\n- Do NOT delete or rewrite existing MASTER facts unless L3 A/B explicitly and concretely show a change.\n- \"Not mentioned\" is NOT evidence that something stopped being true.\n\nANTI-OVERWRITE / CONFLICT RULES (critical):\n- If L3 A/B contradict MASTER, do NOT overwrite.\n- Add a bullet that preserves both, labeled:\n  Conflict/Update\n - MASTER: \"...\"; L3: \"...\"\n  (include anchors from MASTER and from L3).\n- Dedupe only truly identical claims.\n\nHARD OUTPUT RULES:\n- Output bullets only (nested allowed).\n- Keep durable, long-term memory only: names/nicknames/roles, preferences, boundaries, relationship dynamics, running jokes, recurring themes, major decisions/constraints, locked conventions.\n- Every NEW or MODIFIED bullet must include at least ONE concrete anchor from L3 A/B (quote <= 12 words, named thing, explicit rule/format, or specific action).\n- Avoid report/corporate language.\n- Keep it concise by compressing, not by flattening specifics.\n\nCURRENT MASTER:\n{master}\n\nL3 A:\n{a}\n\nL3 B:\n{b}\n\nUPDATED MASTER:"
   },
   "limits": {
-    "l1_max_bullets": 10,
-    "l2_max_bullets": 20,
+    "l1_max_bullets": 15,
+    "l2_max_bullets": 25,
     "l3_max_bullets": 30,
     "l4_max_bullets": 40
   }
