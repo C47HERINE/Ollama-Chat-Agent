@@ -186,11 +186,12 @@ def main():
                     autopilot.observe_inbound(chat_id, text)
 
                     # 1) log inbound + build context (string returned)
-                    ctx = mem.on_message("user", text, kind="inbound")
+                    mem.on_message("user", text, kind="inbound")
 
                     # 2) ask model with injected context
                     llm.use_chat(chat_id)
-                    reply = (llm.ask(text, stream_to_console=False, injected_ctx=ctx) or "").strip()
+                    messages = mem.build_ollama_messages(text)
+                    reply = (llm.ask_messages(messages, stream_to_console=False) or "").strip()
                     reply = strip_role_prefixes(reply)
 
                     if reply:
