@@ -85,43 +85,45 @@ class WeatherInjector:
             return ""
         sunrise = ss.get("sunrise", "")
         sunset = ss.get("sunset", "")
-        temp_part = ""
+
+        # Trim ISO timestamps → HH:MM if present
+        if "T" in sunrise:
+            sunrise = sunrise.split("T")[1][:5]
+        if "T" in sunset:
+            sunset = sunset.split("T")[1][:5]
+
+        weather_line = ""
         w = self.fetch_weather_openweather()
         if w:
             temp = w.get("main", {}).get("temp")
-            condition = ((w.get("weather") or [{}])[0].get("main") or "").strip()
+            condition = ((w.get("weather") or [{}])[0].get("main") or "").lower().strip()
             unit = "°C" if self.units == "metric" else ("°F" if self.units == "imperial" else "K")
             if temp is not None and condition:
-                temp_part = f"Temp {temp}{unit}, {condition}."
+                weather_line = f"• Weather: {round(temp)}{unit}, {condition}"
             elif temp is not None:
-                temp_part = f"Temp {temp}{unit}."
+                weather_line = f"• Weather: {round(temp)}{unit}"
             elif condition:
-                temp_part = f"{condition}."
-
+                weather_line = f"• Weather: {condition}"
         dt = core_time.local_dt()
-        date_str = dt.strftime("%Y-%m-%d")
-        time_str = dt.strftime("%H:%M")
-        day_name = dt.strftime("%A")  # Monday, Tuesday, ...
-        day_type = core_time.weekday_label()  # weekday/weekend
-        time_of_day = core_time.time_of_day_label(dt.hour)  # morning/afternoon/evening/night
 
+        header = "Context update (time and environment)"
         lines = [
-            "Context update (time and environment):",
-            f"Date: {date_str},",
-            f"Day: {day_name} ({day_type}),",
-            f"Time: {time_str}, it is ({time_of_day}).",
-            f"Sunrise: {sunrise}",
-            f"Sunset: {sunset}",
-        ]
-        if temp_part:
-            lines.append(temp_part)
-        return "\n".join(lines).strip()
+            header,
+            "",
+            f"• {dt.strftime('%A, %B %d, %Y')} ({core_time.weekday_label()})",
+            f"• Local time: {dt.strftime('%H:%M')} — {core_time.time_of_day_label(dt.hour)}",
+            f"• Sunrise: {sunrise}",
+            f"• Sunset: {sunset}",
+            ]
+        if weather_line:
+            lines.append(weather_line)
+        return "\n".join(lines)
 
     def weather_updater(self):
-        if not self.should_update_now():
-            return None
+        # if not self.should_update_now():
+        #     return None
         text = self.build_injection_text()
-        if not text or not text.strip():
-            return None
-        self.mark_updated()
+        # if not text or not text.strip():
+        #     return None
+        # self.mark_updated()
         return text

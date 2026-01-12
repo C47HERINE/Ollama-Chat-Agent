@@ -37,7 +37,7 @@ class ContextBuilder:
         if weather_txt and weather_txt.strip():
             helpers.write_text(path, weather_txt)
         low_text = helpers.read_text(path).strip()
-        self.cache.set_section("low", "LOW PRIORITY", low_text)
+        self.cache.set_section("low", "", low_text)
 
     def update_l0(self, l0_items: list) -> None:
         txt = helpers.render_chat_as_text(l0_items)

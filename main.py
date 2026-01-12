@@ -209,4 +209,5 @@ def main():
             print(f"[UNEXPECTED_ERROR] {e}")
             time.sleep(2)
 
-main()
+if __name__ == "__main__":
+    main()
