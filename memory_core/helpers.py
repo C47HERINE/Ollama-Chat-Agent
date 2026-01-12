@@ -9,7 +9,8 @@ def read_text(path: str) -> str:
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
-    except Exception:
+    except Exception as e:
+        print (f"memory_core.helpers.read_text: {e}")
         return ""
 
 def write_text(path: str, text: str) -> None:
@@ -17,12 +18,13 @@ def write_text(path: str, text: str) -> None:
     with open(path, "w", encoding="utf-8", errors="replace") as f:
         f.write((text or "") + "\n")
 
-def read_json(path: str, default):
+def read_json(path: str):
     try:
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
-        return default
+    except Exception as e:
+        print(f"memory_core.helpers.read_json: {e}")
+        return ""
 
 def write_json(path: str, obj) -> None:
     ensure_dir(os.path.dirname(path))
