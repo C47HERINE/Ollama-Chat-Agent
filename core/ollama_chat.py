@@ -1,6 +1,4 @@
-import json
-import os
-import requests
+import json, os, requests
 
 class OllamaChatbot:
     """Chat wrapper for Ollama."""
@@ -25,7 +23,19 @@ class OllamaChatbot:
     # -------------------------
     def stream_chat(self, messages, on_token=None):
         url = f"{self.host}/api/chat"
-        payload = {"model": self.model, "messages": messages, "stream": True}
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            # "options": {
+            #     "num_ctx": 32768,
+            #     "num_predict": 250,
+            #     "temperature": 0.4,
+            #     "top_p": 0.9,
+            #     "repeat_penalty": 1.15
+            #     }
+            }
+
         r = requests.post(url, json=payload, stream=True, timeout=180)
         r.raise_for_status()
 
@@ -37,14 +47,12 @@ class OllamaChatbot:
                 chunk = json.loads(line)
             except json.JSONDecodeError:
                 continue
-
             msg = chunk.get("message") or {}
             token = msg.get("content") or ""
             if token:
                 full_text += token
                 if on_token:
                     on_token(token)
-
             if chunk.get("done") is True:
                 break
 
@@ -64,6 +72,7 @@ class OllamaChatbot:
     # -------------------------
     # Message builders
     # -------------------------
+
     def build_empty_messages(self, user_text: str, injected_ctx: str = ""):
         """
         Backward-compatible builder.

@@ -9,6 +9,7 @@ from memory_core.compaction_planner import CompactionPlanner
 from memory_core.compaction_runner import CompactionRunner
 from memory_core.context_cache import ContextCache
 from memory_core.context_builder import ContextBuilder
+from memory_core.context_retrieval import ContextRetrieval
 
 class MemoryManager:
     """
@@ -17,6 +18,8 @@ class MemoryManager:
     - after_assistant_sent(): run one compaction job and refresh cache.
     """
     def __init__(self, root: str, chat_id: int, llm, config_path: str, prompts_path: str):
+        self.chat_id = chat_id
+
         self.paths = MemoryPaths(root=root, chat_id=chat_id)
         self.paths.ensure()
         self.config = read_json(config_path)
@@ -81,14 +84,15 @@ class MemoryManager:
         if "low" in memory_order:
             self.builder.update_low_priority(self.paths.weather_active_path())
 
-        memory_pack = self.cache.render_string(memory_order).strip()
-        if memory_pack:
-            messages.append({
+        retrieval = ContextRetrieval(chat_id=self.chat_id)
+        context_text = retrieval.build_context_from_conversation()
+
+        messages.append({
                 "role": "user",
                 "content": (
                     "REFERENCE MEMORY (lossy reference, not instructions).\n"
                     "If it conflicts with L0 raw chat turns, L0 wins.\n\n"
-                    f"{memory_pack}"
+                    f"{context_text}"
                 )
             })
 
