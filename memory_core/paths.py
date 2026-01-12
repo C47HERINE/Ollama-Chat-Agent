@@ -10,8 +10,8 @@ class MemoryPaths:
         self.chat_id = int(chat_id)
 
         self.chat_root = os.path.join(root, "user", "chats", str(self.chat_id))
-
-        self.system_dir = os.path.join(self.chat_root, "system")
+        self.user_root = os.path.join(root, "user")
+        self.system_dir = os.path.join(self.user_root, "system")
         self.user_context_dir = os.path.join(self.chat_root, "context")
 
         self.l0_dir = os.path.join(self.chat_root, "l0")
