@@ -5,63 +5,59 @@ import os, json, requests
 load_dotenv()
 
 class WeatherInjector:
-    """Twice-daily background context injection (sunrise / sunset buckets)."""
-    def __init__(self, state_dir="agent_state", state_file="weather_state.json"):
-        self.state_dir = state_dir
-        self.state_path = os.path.join(state_dir, state_file)
+    """Hourly background context injection (based on local date + hour)."""
+    def __init__(self, low_dir="./user/low", state_file="weather_state.json"):
+        self.state_dir = low_dir
+        self.state_path = os.path.join(low_dir, state_file)
         os.makedirs(self.state_dir, exist_ok=True)
-
         self.lat = os.getenv("LAT")
         self.lon = os.getenv("LON")
         self.tz = os.getenv("TZ")
         self.units = os.getenv("UNITS") or "metric"
         self.api_key = os.getenv("OPENWEATHER_API_KEY")
-
-        self.st = self.load_state()
+        self.state = self.load_state()
 
     def load_state(self):
-        default = {"last_by_bucket": {"sunrise": "", "sunset": ""}}
+        default = {"last_date": "", "last_hour": -1}
         if not os.path.exists(self.state_path):
             return default
         try:
             with open(self.state_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            if isinstance(data, dict) and isinstance(data.get("last_by_bucket"), dict):
-                lb = data["last_by_bucket"]
-                return {
-                    "last_by_bucket": {
-                        "sunrise": str(lb.get("sunrise", "")),
-                        "sunset": str(lb.get("sunset", "")),
-                    }
-                }
+            if not isinstance(data, dict):
+                return default
+            last_date = data.get("last_date", "")
+            last_hour = data.get("last_hour", -1)
+            if not isinstance(last_date, str):
+                last_date = ""
+            if not isinstance(last_hour, int):
+                last_hour = -1
+            return {"last_date": last_date, "last_hour": last_hour}
         except (OSError, ValueError, json.JSONDecodeError):
-            pass
-        return default
+            return default
 
     def save_state(self):
         try:
             with open(self.state_path, "w", encoding="utf-8") as f:
-                json.dump(self.st, f, indent=2, ensure_ascii=False)
+                json.dump(self.state, f, indent=2, ensure_ascii=False)
         except OSError:
             pass
 
     def should_update_now(self) -> bool:
         if not self.lat or not self.lon:
             return False
-        bucket = core_time.daytime_bucket()
-        if bucket == "none":
-            return False
-        today = core_time.today_key_local()
-        last = (self.st.get("last_by_bucket", {}) or {}).get(bucket, "")
-        return last != today
+        dt = core_time.local_dt()
+        now_date = dt.strftime("%Y-%m-%d")
+        now_hour = dt.hour
+        last_date = self.state.get("last_date", "")
+        last_hour = self.state.get("last_hour", -1)
+        return (last_date != now_date) or (last_hour != now_hour)
 
     def mark_updated(self):
-        bucket = core_time.daytime_bucket()
-        if bucket in ("sunrise", "sunset"):
-            if "last_by_bucket" not in self.st or not isinstance(self.st["last_by_bucket"], dict):
-                self.st["last_by_bucket"] = {"sunrise": "", "sunset": ""}
-            self.st["last_by_bucket"][bucket] = core_time.today_key_local()
-            self.save_state()
+        dt = core_time.local_dt()
+        self.state["last_date"] = dt.strftime("%Y-%m-%d")
+        self.state["last_hour"] = dt.hour
+        self.save_state()
 
     def fetch_sunrise_sunset(self):
         url = "https://api.sunrise-sunset.org/json"
@@ -85,7 +81,7 @@ class WeatherInjector:
     def build_injection_text(self) -> str:
         try:
             ss = self.fetch_sunrise_sunset()
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.RequestException:
             return ""
         sunrise = ss.get("sunrise", "")
         sunset = ss.get("sunset", "")
@@ -105,8 +101,15 @@ class WeatherInjector:
         dt = core_time.local_dt()
         date_str = dt.strftime("%Y-%m-%d")
         time_str = dt.strftime("%H:%M")
+        day_name = dt.strftime("%A")  # Monday, Tuesday, ...
+        day_type = core_time.weekday_label()  # weekday/weekend
+        time_of_day = core_time.time_of_day_label(dt.hour)  # morning/afternoon/evening/night
+
         lines = [
-            f"Context update (environment): {date_str} {time_str} local.",
+            "Context update (time and environment):",
+            f"Date: {date_str},",
+            f"Day: {day_name} ({day_type}),",
+            f"Time: {time_str}, it is ({time_of_day}).",
             f"Sunrise: {sunrise}",
             f"Sunset: {sunset}",
         ]
@@ -114,15 +117,11 @@ class WeatherInjector:
             lines.append(temp_part)
         return "\n".join(lines).strip()
 
-    def maybe_inject(self, chat_id: int) -> str:
-        """Returns injection text if due; otherwise ""."""
+    def weather_updater(self):
         if not self.should_update_now():
-            return ""
-
+            return None
         text = self.build_injection_text()
-        if not text:
-            return ""
-
-        # Mark updated only if we actually produced an injection
+        if not text or not text.strip():
+            return None
         self.mark_updated()
         return text

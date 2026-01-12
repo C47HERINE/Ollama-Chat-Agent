@@ -1,4 +1,5 @@
 import os
+
 import memory_core.helpers as helpers
 
 def _read_folder(folder: str) -> str:
@@ -29,9 +30,14 @@ class ContextBuilder:
         ctx_txt = _read_folder(self.paths.user_context_dir)
         self.cache.set_section("user_context", "USER CONTEXT", ctx_txt)
 
-    def update_low_priority(self, low_text: str) -> None:
-        # weather/introspection later; keep empty or a small block
-        self.cache.set_section("low", "LOW PRIORITY", (low_text or "").strip())
+    def update_low_priority(self, path) -> None:
+        import core.weather as weather
+        weather_injector = weather.WeatherInjector()
+        weather_txt = weather_injector.weather_updater()
+        if weather_txt and weather_txt.strip():
+            helpers.write_text(path, weather_txt)
+        low_text = helpers.read_text(path).strip()
+        self.cache.set_section("low", "LOW PRIORITY", low_text)
 
     def update_l0(self, l0_items: list) -> None:
         txt = helpers.render_chat_as_text(l0_items)

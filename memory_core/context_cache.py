@@ -29,15 +29,14 @@ class ContextCache:
         sec = (d.get("sections") or {}).get(section_id) or {}
         return (sec.get("text") or "").strip()
 
-
     def render_string(self, order: list) -> str:
         """Render sections in `order` to a single string (no file write)."""
         d = self.load()
         sections = d.get("sections", {}) if isinstance(d.get("sections", {}), dict) else {}
 
         parts = []
-        for sid in order:
-            sec = sections.get(sid)
+        for section in order:
+            sec = sections.get(section)
             if not sec:
                 continue
             title = (sec.get("title") or "").strip()

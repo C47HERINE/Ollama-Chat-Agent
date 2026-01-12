@@ -19,7 +19,7 @@ class MemoryPaths:
         self.l2_dir = os.path.join(self.chat_root, "l2")
         self.l3_dir = os.path.join(self.chat_root, "l3")
         self.l4_dir = os.path.join(self.chat_root, "l4")
-
+        self.low_dir = os.path.join(self.chat_root, "low")
         self.state_dir = os.path.join(self.chat_root, "state")
         self.temp_dir = os.path.join(self.chat_root, "temp")
 
@@ -30,6 +30,9 @@ class MemoryPaths:
             self.state_dir, self.temp_dir
         ]:
             ensure_dir(d)
+
+    def weather_active_path(self) -> str:
+        return os.path.join(self.low_dir, "weather.md")
 
     def l0_active_path(self) -> str:
         return os.path.join(self.l0_dir, "active.json")

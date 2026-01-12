@@ -39,19 +39,6 @@ def time_of_day_label(hour: int) -> str:
         return "evening"
     return "night"
 
-def today_key_local() -> str:
-    """Return YYYY-MM-DD using OS-local date."""
-    return local_dt().strftime("%Y-%m-%d")
-
-def daytime_bucket() -> str:
-    """Return sunrise/sunset/none from OS-local hour."""
-    hour = local_dt().hour
-    if 6 <= hour < 14:
-        return "sunrise"
-    if 14 <= hour < 22:
-        return "sunset"
-    return "none"
-
 def jitter_ms(min_ms: int, max_ms: int) -> int:
     """Return deterministic jitter in milliseconds."""
     frac = time.time() % 1
