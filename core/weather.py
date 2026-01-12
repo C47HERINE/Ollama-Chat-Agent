@@ -86,26 +86,21 @@ class WeatherInjector:
         try:
             ss = self.fetch_sunrise_sunset()
         except requests.exceptions.RequestException as e:
-            core_log("WEATHER_FETCH_FAIL", error=str(e), source="sunrise-sunset")
             return ""
         sunrise = ss.get("sunrise", "")
         sunset = ss.get("sunset", "")
         temp_part = ""
-        try:
-            w = self.fetch_weather_openweather()
-            if w:
-                temp = w.get("main", {}).get("temp")
-                condition = ((w.get("weather") or [{}])[0].get("main") or "").strip()
-                unit = "°C" if self.units == "metric" else ("°F" if self.units == "imperial" else "K")
-                if temp is not None and condition:
-                    temp_part = f"Temp {temp}{unit}, {condition}."
-                elif temp is not None:
-                    temp_part = f"Temp {temp}{unit}."
-                elif condition:
-                    temp_part = f"{condition}."
-        except requests.exceptions.RequestException as e:
-            core_log("WEATHER_FETCH_FAIL", error=str(e), source="openweather")
-            # keep sunrise/sunset even if openweather fails
+        w = self.fetch_weather_openweather()
+        if w:
+            temp = w.get("main", {}).get("temp")
+            condition = ((w.get("weather") or [{}])[0].get("main") or "").strip()
+            unit = "°C" if self.units == "metric" else ("°F" if self.units == "imperial" else "K")
+            if temp is not None and condition:
+                temp_part = f"Temp {temp}{unit}, {condition}."
+            elif temp is not None:
+                temp_part = f"Temp {temp}{unit}."
+            elif condition:
+                temp_part = f"{condition}."
 
         dt = core_time.local_dt()
         date_str = dt.strftime("%Y-%m-%d")
@@ -122,15 +117,12 @@ class WeatherInjector:
     def maybe_inject(self, chat_id: int) -> str:
         """Returns injection text if due; otherwise ""."""
         if not self.should_update_now():
-            core_log("WEATHER_SKIP", chat_id=chat_id)
             return ""
 
         text = self.build_injection_text()
         if not text:
-            core_log("WEATHER_SKIP", chat_id=chat_id, reason="empty_text")
             return ""
 
         # Mark updated only if we actually produced an injection
         self.mark_updated()
-        core_log("WEATHER_READY", chat_id=chat_id, chars=len(text))
         return text

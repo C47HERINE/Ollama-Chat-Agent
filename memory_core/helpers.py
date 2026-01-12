@@ -29,7 +29,7 @@ def write_json(path: str, obj) -> None:
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
-def append_jsonl(path: str, obj: dict) -> None:
+def append_json(path: str, obj: dict) -> None:
     ensure_dir(os.path.dirname(path))
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(obj, ensure_ascii=False) + "\n")

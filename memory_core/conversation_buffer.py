@@ -1,5 +1,5 @@
 import time
-from memory_core.helpers import read_json, write_json, append_jsonl
+from memory_core.helpers import read_json, write_json, append_json
 
 class ConversationBuffer:
     """
@@ -41,4 +41,4 @@ class ConversationBuffer:
 
     def archive_many(self, items: list) -> None:
         for it in items or []:
-            append_jsonl(self.archive_path, it)
+            append_json(self.archive_path, it)
