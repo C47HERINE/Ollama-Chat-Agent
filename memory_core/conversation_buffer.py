@@ -10,7 +10,7 @@ class ConversationBuffer:
         self.archive_path = archive_path
 
     def _load(self) -> list:
-        data = read_json(self.active_path, default=[])
+        data = read_json(self.active_path)
         return data if isinstance(data, list) else []
 
     def _save(self, items: list) -> None:

@@ -10,7 +10,7 @@ class ContextCache:
         self.sep_line = sep_line
 
     def load(self) -> dict:
-        d = read_json(self.cache_path, default={})
+        d = read_json(self.cache_path)
         if not isinstance(d, dict):
             d = {}
         d.setdefault("sections", {})

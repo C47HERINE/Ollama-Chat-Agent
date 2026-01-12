@@ -1,5 +1,5 @@
 import os
-from memory_core.helpers import read_text, render_chat_as_text
+import memory_core.helpers as helpers
 
 def _read_folder(folder: str) -> str:
     if not os.path.isdir(folder):
@@ -8,7 +8,7 @@ def _read_folder(folder: str) -> str:
     for name in sorted(os.listdir(folder)):
         p = os.path.join(folder, name)
         if os.path.isfile(p) and name.lower().endswith((".md", ".txt")):
-            txt = read_text(p).strip()
+            txt = helpers.read_text(p).strip()
             if txt:
                 parts.append(txt)
     return "\n\n".join(parts).strip()
@@ -34,21 +34,20 @@ class ContextBuilder:
         self.cache.set_section("low", "LOW PRIORITY", (low_text or "").strip())
 
     def update_l0(self, l0_items: list) -> None:
-        txt = render_chat_as_text(l0_items)
+        txt = helpers.render_chat_as_text(l0_items)
         self.cache.set_section("l0", "CONVERSATION (L0)", txt)
 
     def update_levels(self, st: dict) -> None:
         def join_files(paths_list):
             out = []
             for p in paths_list or []:
-                t = read_text(p).strip()
+                t = helpers.read_text(p).strip()
                 if t:
                     out.append(t)
             return "\n\n".join(out).strip()
 
-        master_txt = read_text(self.paths.master_path()).strip()
+        master_txt = helpers.read_text(self.paths.master_path()).strip()
         self.cache.set_section("l4", "MASTER (L4)", master_txt)
-
         self.cache.set_section("l3", "SUMMARIES (L3)", join_files(st.get("l3_active", [])))
         self.cache.set_section("l2", "SUMMARIES (L2)", join_files(st.get("l2_active", [])))
         self.cache.set_section("l1", "SUMMARIES (L1)", join_files(st.get("l1_active", [])))

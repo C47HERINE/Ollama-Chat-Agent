@@ -5,7 +5,7 @@ class PromptLibrary:
     Load prompts.json and format templates.
     """
     def __init__(self, prompts_json_path: str):
-        data = read_json(prompts_json_path, default={})
+        data = read_json(prompts_json_path)
         self.templates = (data.get("templates") or {}) if isinstance(data, dict) else {}
         self.limits = (data.get("limits") or {}) if isinstance(data, dict) else {}
 

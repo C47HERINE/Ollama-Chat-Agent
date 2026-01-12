@@ -20,15 +20,15 @@ class StateStore:
         })
 
     def load(self) -> dict:
-        st = read_json(self.state_path, default=None)
-        if not isinstance(st, dict):
-            st = {}
-        st.setdefault("l1_active", [])
-        st.setdefault("l2_active", [])
-        st.setdefault("l3_active", [])
-        st.setdefault("jobs", [])
-        st.setdefault("ephemeral", {})
-        return st
+        state = read_json(self.state_path)
+        if not isinstance(state, dict):
+            state = {}
+        state.setdefault("l1_active", [])
+        state.setdefault("l2_active", [])
+        state.setdefault("l3_active", [])
+        state.setdefault("jobs", [])
+        state.setdefault("ephemeral", {})
+        return state
 
     def save(self, st: dict) -> None:
         write_json(self.state_path, st)
