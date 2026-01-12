@@ -71,7 +71,6 @@ class MemoryManager:
         messages = []
         if system_text:
             messages.append({"role": "system", "content": (system_text + "\n\n" + authority).strip()})
-            print(f"System Prompt: {len(self.builder.get_system_prompt())}")
         else:
             messages.append({"role": "system", "content": authority})
             print("System Prompt: missing")
