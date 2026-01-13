@@ -63,9 +63,7 @@ def main():
     telegram = TelegramBot(telegram_bot_token)
     autopilot = AutoPilot(tick_every_seconds=30)
     voice = VoiceRouter(audio_out_path="./user/voice/temp/voice_memo.wav", threshold_chars=250)
-
     ollama = OllamaChatbot()
-
     known_chats = load_known_chats()
     for chat_id in list(known_chats):
         autopilot.register_chat(chat_id)
@@ -106,10 +104,10 @@ def main():
         if not text_to_send:
             return
 
-        _memory_manager = get_memory_manager(telegram_chat_id)
+        memory_manager = get_memory_manager(telegram_chat_id)
 
         # log assistant message (L0) and update context
-        _memory_manager.on_message("assistant", text_to_send, kind="autopilot")
+        memory_manager.on_message("assistant", text_to_send, kind="autopilot")
 
         # send to telegram
         _kind, _sent_text = voice.send(telegram, telegram_chat_id, text_to_send)
