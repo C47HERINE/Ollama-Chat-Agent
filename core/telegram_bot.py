@@ -1,5 +1,7 @@
 import os
+
 import requests
+
 
 class TelegramBot:
     def __init__(self, token):
@@ -21,7 +23,7 @@ class TelegramBot:
             "chat_id": chat_id,
             "text": text,
             "disable_web_page_preview": disable_web_page_preview,
-            }
+        }
         r = requests.post(self.base_url + method, params=params, timeout=60)
         r.raise_for_status()
         return r.json()

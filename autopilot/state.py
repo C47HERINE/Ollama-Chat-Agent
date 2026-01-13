@@ -1,4 +1,6 @@
-import os, json
+import json
+import os
+
 
 def default_state():
     return {
@@ -27,8 +29,10 @@ def default_state():
         "since_user_autonomous_cap": 0,
     }
 
+
 def state_path(state_dir, chat_id):
     return os.path.join(state_dir, f"state_{chat_id}.json")
+
 
 def load_state(state_dir, chat_id):
     path = state_path(state_dir, chat_id)
@@ -45,6 +49,7 @@ def load_state(state_dir, chat_id):
     except Exception as e:
         print(f"[load_state] failed to load {path}: {e}")
         return default_state()
+
 
 def save_state(state_dir, chat_id, st):
     os.makedirs(state_dir, exist_ok=True)

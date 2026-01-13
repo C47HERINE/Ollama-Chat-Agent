@@ -1,17 +1,20 @@
 import os
-from memory_core.job_queue import JobQueue
+
 from memory_core.helpers import read_text, write_text, render_chat_as_text
+from memory_core.job_queue import JobQueue
 from memory_core.recap_store import RecapStore
+
 
 class CompactionRunner:
     """
     Run EXACTLY ONE job (highest priority) per call.
     Designed to be called AFTER assistant sends.
     """
-    def __init__(self, paths, state_store, conv_buf, summarizer):
+
+    def __init__(self, paths, state_store, conversation_buffer, summarizer):
         self.paths = paths
         self.state_store = state_store
-        self.conv = conv_buf
+        self.conversation = conversation_buffer
         self.summarizer = summarizer
 
     def _load_master(self) -> str:
@@ -32,49 +35,49 @@ class CompactionRunner:
         raise ValueError("level must be 1..3")
 
     def run_one(self) -> bool:
-        st = self.state_store.load()
-        q = JobQueue(st.get("jobs", []))
-        job = q.pop_next()
+        state = self.state_store.load()
+        queue = JobQueue(state.get("jobs", []))
+        job = queue.pop_next()
 
         if not job:
-            st["jobs"] = q.jobs
-            self.state_store.save(st)
+            state["jobs"] = queue.jobs
+            self.state_store.save(state)
             return False
 
-        jtype = job.get("type", "")
+        job_type = job.get("type", "")
 
         # Preconditions to avoid overflowing the next level.
         # If blocked, requeue current job and ensure higher-level job exists.
-        if jtype == "COMPACT_L0_TO_L1" and len(st["l1_active"]) >= 3:
-            q.enqueue_once("COMPACT_L1_TO_L2")
-            q.jobs.append(job)
-            st["jobs"] = q.jobs
-            self.state_store.save(st)
+        if job_type == "COMPACT_L0_TO_L1" and len(state["l1_active"]) >= 3:
+            queue.enqueue_once("COMPACT_L1_TO_L2")
+            queue.jobs.append(job)
+            state["jobs"] = queue.jobs
+            self.state_store.save(state)
             return False
 
-        if jtype == "COMPACT_L1_TO_L2" and len(st["l2_active"]) >= 3:
-            q.enqueue_once("COMPACT_L2_TO_L3")
-            q.jobs.append(job)
-            st["jobs"] = q.jobs
-            self.state_store.save(st)
+        if job_type == "COMPACT_L1_TO_L2" and len(state["l2_active"]) >= 3:
+            queue.enqueue_once("COMPACT_L2_TO_L3")
+            queue.jobs.append(job)
+            state["jobs"] = queue.jobs
+            self.state_store.save(state)
             return False
 
-        if jtype == "COMPACT_L2_TO_L3" and len(st["l3_active"]) >= 3:
-            q.enqueue_once("COMPACT_L3_TO_L4")
-            q.jobs.append(job)
-            st["jobs"] = q.jobs
-            self.state_store.save(st)
+        if job_type == "COMPACT_L2_TO_L3" and len(state["l3_active"]) >= 3:
+            queue.enqueue_once("COMPACT_L3_TO_L4")
+            queue.jobs.append(job)
+            state["jobs"] = queue.jobs
+            self.state_store.save(state)
             return False
 
         # ---- Execute ONE job ----
-        if jtype == "COMPACT_L3_TO_L4":
-            if len(st["l3_active"]) < 2:
+        if job_type == "COMPACT_L3_TO_L4":
+            if len(state["l3_active"]) < 2:
                 # nothing to do
-                st["jobs"] = q.jobs
-                self.state_store.save(st)
+                state["jobs"] = queue.jobs
+                self.state_store.save(state)
                 return False
 
-            a, b = st["l3_active"][0], st["l3_active"][1]
+            a, b = state["l3_active"][0], state["l3_active"][1]
             l3_store = self._level_store(3)
             a_txt, b_txt = l3_store.read(a), l3_store.read(b)
 
@@ -83,15 +86,15 @@ class CompactionRunner:
             self._save_master(master_new)
 
             # remove the oldest two; newest (and any beyond) remains as buffer
-            st["l3_active"] = st["l3_active"][2:]
+            state["l3_active"] = state["l3_active"][2:]
 
-        elif jtype == "COMPACT_L2_TO_L3":
-            if len(st["l2_active"]) < 2:
-                st["jobs"] = q.jobs
-                self.state_store.save(st)
+        elif job_type == "COMPACT_L2_TO_L3":
+            if len(state["l2_active"]) < 2:
+                state["jobs"] = queue.jobs
+                self.state_store.save(state)
                 return False
 
-            a, b = st["l2_active"][0], st["l2_active"][1]
+            a, b = state["l2_active"][0], state["l2_active"][1]
             l2_store = self._level_store(2)
             a_txt, b_txt = l2_store.read(a), l2_store.read(b)
 
@@ -99,16 +102,16 @@ class CompactionRunner:
             l3_store = self._level_store(3)
             out = l3_store.write_new("l3", merged)
 
-            st["l2_active"] = st["l2_active"][2:]
-            st["l3_active"].append(out)
+            state["l2_active"] = state["l2_active"][2:]
+            state["l3_active"].append(out)
 
-        elif jtype == "COMPACT_L1_TO_L2":
-            if len(st["l1_active"]) < 2:
-                st["jobs"] = q.jobs
-                self.state_store.save(st)
+        elif job_type == "COMPACT_L1_TO_L2":
+            if len(state["l1_active"]) < 2:
+                state["jobs"] = queue.jobs
+                self.state_store.save(state)
                 return False
 
-            a, b = st["l1_active"][0], st["l1_active"][1]
+            a, b = state["l1_active"][0], state["l1_active"][1]
             l1_store = self._level_store(1)
             a_txt, b_txt = l1_store.read(a), l1_store.read(b)
 
@@ -116,27 +119,27 @@ class CompactionRunner:
             l2_store = self._level_store(2)
             out = l2_store.write_new("l2", merged)
 
-            st["l1_active"] = st["l1_active"][2:]
-            st["l2_active"].append(out)
+            state["l1_active"] = state["l1_active"][2:]
+            state["l2_active"].append(out)
 
-        elif jtype == "COMPACT_L0_TO_L1":
+        elif job_type == "COMPACT_L0_TO_L1":
             # pop oldest 20 and keep last 10 in active.json
-            chunk = self.conv.pop_oldest(20)
+            chunk = self.conversation.pop_oldest(20)
             if not chunk:
-                st["jobs"] = q.jobs
-                self.state_store.save(st)
+                state["jobs"] = queue.jobs
+                self.state_store.save(state)
                 return False
 
-            self.conv.archive_many(chunk)
+            self.conversation.archive_many(chunk)
             chunk_txt = render_chat_as_text(chunk)
 
             recap = self.summarizer.l0_to_l1(chunk_txt)
             l1_store = self._level_store(1)
             out = l1_store.write_new("l1", recap)
 
-            st["l1_active"].append(out)
+            state["l1_active"].append(out)
 
         # Save updated state (job already removed by pop_next)
-        st["jobs"] = q.jobs
-        self.state_store.save(st)
+        state["jobs"] = queue.jobs
+        self.state_store.save(state)
         return True

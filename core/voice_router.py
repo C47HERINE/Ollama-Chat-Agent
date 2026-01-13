@@ -1,22 +1,28 @@
-from chatterbox.tts import ChatterboxTTS
-import os, re, torch, wave
+import os
+import re
+import torch
+import wave
+
 import numpy as np
+from chatterbox.tts import ChatterboxTTS
+
 
 class VoiceRouter:
     """Route assistant output to Telegram as text or a single voice memo."""
+
     def __init__(
-        self,
-        audio_out_path="./user/voice/temp/voice_memo.wav",
-        threshold_chars=250,
-        voice_command="/voice",
-        device="cuda",
-        audio_prompt_path=None,
-        exaggeration=None,
-        cfg_weight=None,
-        temperature=None,
-        batch_target_chars=250,
-        batch_max_chars=500,
-        ):
+            self,
+            audio_out_path="./user/voice/temp/voice_memo.wav",
+            threshold_chars=250,
+            voice_command="/voice",
+            device="cuda",
+            audio_prompt_path=None,
+            exaggeration=None,
+            cfg_weight=None,
+            temperature=None,
+            batch_target_chars=250,
+            batch_max_chars=500,
+    ):
 
         env_prompt = os.getenv("VOICE_PROMPT_WAV")
         env_exaggeration = os.getenv("VOICE_EXAGGERATION")
@@ -32,22 +38,22 @@ class VoiceRouter:
 
         self.audio_prompt_path = (
             audio_prompt_path if audio_prompt_path is not None else (env_prompt or None)
-            )
+        )
         self.exaggeration = (
             float(exaggeration)
             if exaggeration is not None
             else (float(env_exaggeration) if env_exaggeration else 0.5)
-            )
+        )
         self.cfg_weight = (
             float(cfg_weight)
             if cfg_weight is not None
             else (float(env_cfg) if env_cfg else 0.5)
-            )
+        )
         self.temperature = (
             float(temperature)
             if temperature is not None
             else (float(env_temperature) if temperature else 0.8)
-            )
+        )
         if device:
             self.device = device
         else:
@@ -75,7 +81,7 @@ class VoiceRouter:
             "\U000024C2-\U0001F251"
             "]+",
             flags=re.UNICODE,
-            )
+        )
         return emoji_pattern.sub("", text)
 
     def clean_text_for_tts(self, text: str) -> str:
@@ -105,7 +111,7 @@ class VoiceRouter:
             .replace("”", '"')
             .replace("–", "-")
             .replace("—", "-")
-            )
+        )
 
         # --- Remove non-printable characters ---
         t = "".join(ch for ch in t if ch.isprintable())
@@ -114,6 +120,7 @@ class VoiceRouter:
         t = re.sub(r"\s+", " ", t).strip()
 
         return t
+
     def find_voice_split(self, text: str):
         if not text:
             return "", ""

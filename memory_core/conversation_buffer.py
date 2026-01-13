@@ -1,10 +1,13 @@
 import time
+
 from memory_core.helpers import read_json, write_json, append_json
+
 
 class ConversationBuffer:
     """
     Keep L0 active.json <= 30 messages and archive compacted messages to archive.jsonl.
     """
+
     def __init__(self, active_path: str, archive_path: str):
         self.active_path = active_path
         self.archive_path = archive_path

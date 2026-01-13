@@ -1,9 +1,11 @@
 from memory_core.helpers import read_json
 
+
 class PromptLibrary:
     """
     Load prompts.json and format templates.
     """
+
     def __init__(self, prompts_json_path: str):
         data = read_json(prompts_json_path)
         self.templates = (data.get("templates") or {}) if isinstance(data, dict) else {}

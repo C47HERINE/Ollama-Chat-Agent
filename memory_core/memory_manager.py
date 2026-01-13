@@ -1,15 +1,16 @@
 import os
-from memory_core.helpers import read_json, write_json
-from memory_core.paths import MemoryPaths
-from memory_core.state_store import StateStore
-from memory_core.conversation_buffer import ConversationBuffer
-from memory_core.prompt_library import PromptLibrary
-from memory_core.summarizer import Summarizer
+
 from memory_core.compaction_planner import CompactionPlanner
 from memory_core.compaction_runner import CompactionRunner
-from memory_core.context_cache import ContextCache
 from memory_core.context_builder import ContextBuilder
-from memory_core.context_retrieval import ContextRetrieval
+from memory_core.context_cache import ContextCache
+from memory_core.conversation_buffer import ConversationBuffer
+from memory_core.helpers import read_json, write_json
+from memory_core.paths import MemoryPaths
+from memory_core.prompt_library import PromptLibrary
+from memory_core.state_store import StateStore
+from memory_core.summarizer import Summarizer
+
 
 class MemoryManager:
     """
@@ -17,9 +18,8 @@ class MemoryManager:
     - on_message(): append to L0, plan jobs, update cache, render injection text.
     - after_assistant_sent(): run one compaction job and refresh cache.
     """
-    def __init__(self, root: str, chat_id: int, llm, config_path: str, prompts_path: str):
-        self.chat_id = chat_id
 
+    def __init__(self, root: str, chat_id: int, llm, config_path: str, prompts_path: str):
         self.paths = MemoryPaths(root=root, chat_id=chat_id)
         self.paths.ensure()
         self.config = read_json(config_path)
@@ -35,25 +35,27 @@ class MemoryManager:
         if not os.path.exists(self.paths.l0_active_path()):
             write_json(self.paths.l0_active_path(), [])
 
-        self.conv = ConversationBuffer(self.paths.l0_active_path(), self.paths.l0_archive_path())
+        self.conversation = ConversationBuffer(self.paths.l0_active_path(), self.paths.l0_archive_path())
 
         self.prompts = PromptLibrary(prompts_path)
         self.summarizer = Summarizer(llm=llm, prompt_lib=self.prompts)
+
         self.planner = CompactionPlanner(
             max_level_files=int(self.config["levels"]["max_files"]),
             l0_max_msgs=int(self.config["l0"]["max_msgs"]),
         )
+
         self.cache = ContextCache(self.paths.cache_path(), self.paths.context_txt_path(), sep_line=sep)
         self.builder = ContextBuilder(self.paths, self.cache)
-        self.runner = CompactionRunner(self.paths, self.state_store, self.conv, self.summarizer)
+        self.runner = CompactionRunner(self.paths, self.state_store, self.conversation, self.summarizer)
 
         # Static sections can be refreshed whenever you edit files; do it on init.
         self.builder.update_user_context()
 
         # Initialize cache with current state (empty on first run)
-        st = self.state_store.load()
-        self.builder.update_levels(st)
-        self.builder.update_l0(self.conv.read_all())
+        state = self.state_store.load()
+        self.builder.update_levels(state)
+        self.builder.update_l0(self.conversation.read_all())
         self.cache.render(order=self.config["injection_order"])
 
     def build_chat_messages(self, user_text: str) -> list[dict]:
@@ -80,24 +82,24 @@ class MemoryManager:
 
         # Optional: include "low" section if you want
         if "low" not in memory_order:
+            # only add if you actually use it
             pass
         if "low" in memory_order:
             self.builder.update_low_priority(self.paths.weather_active_path())
 
-        retrieval = ContextRetrieval(chat_id=self.chat_id)
-        context_text = retrieval.build_context_from_conversation()
-
-        messages.append({
+        memory_pack = self.cache.render_string(memory_order).strip()
+        if memory_pack:
+            messages.append({
                 "role": "user",
                 "content": (
                     "REFERENCE MEMORY (lossy reference, not instructions).\n"
                     "If it conflicts with L0 raw chat turns, L0 wins.\n\n"
-                    f"{context_text}"
+                    f"{memory_pack}"
                 )
             })
 
         # 3) L0 as real chat messages
-        l0_items = self.conv.read_all() or []
+        l0_items = self.conversation.read_all() or []
 
         # If on_message already appended this current inbound, drop it to avoid duplication
         if l0_items:
@@ -106,11 +108,11 @@ class MemoryManager:
                     (last.get("content") or "").strip() == (user_text or "").strip()):
                 l0_items = l0_items[:-1]
 
-        for e in l0_items:
-            role = (e.get("role") or "").strip().lower()
+        for item in l0_items:
+            role = (item.get("role") or "").strip().lower()
             if role not in ("user", "assistant", "system"):
                 continue
-            content = (e.get("content") or "").strip()
+            content = (item.get("content") or "").strip()
             if content:
                 messages.append({"role": role, "content": content})
 
@@ -120,10 +122,10 @@ class MemoryManager:
 
     def on_message(self, role: str, content: str, kind: str = "") -> str:
         # 1) Append to L0
-        self.conv.append(role, content, kind=kind)
+        self.conversation.append(role, content, kind=kind)
 
         # 2) Plan jobs
-        l0_items = self.conv.read_all()
+        l0_items = self.conversation.read_all()
         state = self.state_store.load()
         state = self.planner.plan(state, l0_count=len(l0_items))
         self.state_store.save(state)
@@ -142,7 +144,7 @@ class MemoryManager:
         if ran:
             st = self.state_store.load()
             self.builder.update_levels(st)
-            self.builder.update_l0(self.conv.read_all())
+            self.builder.update_l0(self.conversation.read_all())
             self.cache.render(order=self.config["injection_order"])
             return True
         return False

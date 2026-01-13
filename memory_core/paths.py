@@ -1,10 +1,13 @@
 import os
+
 from memory_core.helpers import ensure_dir
+
 
 class MemoryPaths:
     """
     Resolve per-chat paths and ensure folders exist.
     """
+
     def __init__(self, root: str, chat_id: int):
         self.root = root
         self.chat_id = int(chat_id)

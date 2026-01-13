@@ -1,22 +1,26 @@
-import os
 import json
+import os
+
 
 def ensure_dir(path: str) -> None:
     if path:
         os.makedirs(path, exist_ok=True)
+
 
 def read_text(path: str) -> str:
     try:
         with open(path, "r", encoding="utf-8", errors="replace") as f:
             return f.read()
     except Exception as e:
-        print (f"memory_core.helpers.read_text: {e}")
+        print(f"memory_core.helpers.read_text: {e}")
         return ""
+
 
 def write_text(path: str, text: str) -> None:
     ensure_dir(os.path.dirname(path))
     with open(path, "w", encoding="utf-8", errors="replace") as f:
         f.write((text or "") + "\n")
+
 
 def read_json(path: str):
     try:
@@ -26,15 +30,18 @@ def read_json(path: str):
         print(f"memory_core.helpers.read_json: {e}")
         return ""
 
+
 def write_json(path: str, obj) -> None:
     ensure_dir(os.path.dirname(path))
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
+
 def append_json(path: str, obj: dict) -> None:
     ensure_dir(os.path.dirname(path))
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+
 
 def render_chat_as_text(items) -> str:
     """

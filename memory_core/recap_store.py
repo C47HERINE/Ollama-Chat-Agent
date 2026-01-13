@@ -1,10 +1,13 @@
 import os
+
 from memory_core.helpers import ensure_dir, read_text, write_text
+
 
 class RecapStore:
     """
     Create/read/delete recap files for ONE level directory.
     """
+
     def __init__(self, level_dir: str):
         self.level_dir = level_dir
         ensure_dir(level_dir)

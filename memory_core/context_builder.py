@@ -2,6 +2,7 @@ import os
 
 import memory_core.helpers as helpers
 
+
 def _read_folder(folder: str) -> str:
     if not os.path.isdir(folder):
         return ""
@@ -14,10 +15,12 @@ def _read_folder(folder: str) -> str:
                 parts.append(txt)
     return "\n\n".join(parts).strip()
 
+
 class ContextBuilder:
     """
     Update cache sections from filesystem/state (no job logic).
     """
+
     def __init__(self, paths, cache):
         self.paths = paths
         self.cache = cache

@@ -1,9 +1,11 @@
 from memory_core.helpers import read_json, write_json, write_text
 
+
 class ContextCache:
     """
     Store sections in JSON and render to plain text for injection/review.
     """
+
     def __init__(self, cache_path: str, out_txt_path: str, sep_line: str):
         self.cache_path = cache_path
         self.out_txt_path = out_txt_path

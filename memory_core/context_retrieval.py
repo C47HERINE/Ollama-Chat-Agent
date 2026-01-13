@@ -1,8 +1,11 @@
-import re, math
+import math
+import re
 from collections import Counter
 from typing import List, Tuple
-import memory_core.paths as file_path
+
 import memory_core.helpers as helpers
+import memory_core.paths as file_path
+
 
 class ContextRetrieval:
     def __init__(self, chat_id):
@@ -10,9 +13,9 @@ class ContextRetrieval:
         self.context_file_path = memory_paths.context_txt_path()
         self.context_text = helpers.read_text(self.context_file_path)
         self.stopwords = {
-            "the","a","an","and","or","to","of","in","on","for","with","is","are","was","were",
-            "it","this","that","as","at","by","be","from","you","i","we","they","he","she",
-            }
+            "the", "a", "an", "and", "or", "to", "of", "in", "on", "for", "with", "is", "are", "was", "were",
+            "it", "this", "that", "as", "at", "by", "be", "from", "you", "i", "we", "they", "he", "she",
+        }
         self.token_pattern = re.compile(r"[a-z0-9_'-]{2,}")
         self.paragraph_split_pattern = re.compile(r"\n\s*\n")
         self.conversation_file = memory_paths.l0_active_path()
@@ -55,9 +58,9 @@ class ContextRetrieval:
             for token, query_count in query_token_counts.items():
                 if token in token_frequencies:
                     inverse_document_frequency = (
-                        math.log((total_chunk_count + 1) / (document_frequencies[token] + 1))+ 1.0)
+                            math.log((total_chunk_count + 1) / (document_frequencies[token] + 1)) + 1.0)
                     relevance_score += (token_frequencies[token] * inverse_document_frequency
-                        * query_count* inverse_document_frequency)
+                                        * query_count * inverse_document_frequency)
 
             scored_chunks.append((relevance_score, chunk_text))
 
@@ -69,7 +72,7 @@ class ContextRetrieval:
     # ----------------------------
 
     def retrieve_relevant_context(self, query_text: str) -> str:
-        max_character_budget = 6000
+        max_character_budget = 8000
         minimum_chunk_length = 80
         raw_paragraphs = self.paragraph_split_pattern.split(self.context_text)
         text_chunks = [paragraph.strip() for paragraph in raw_paragraphs

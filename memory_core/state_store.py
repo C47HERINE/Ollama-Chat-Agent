@@ -1,10 +1,13 @@
 import os
+
 from memory_core.helpers import read_json, write_json
+
 
 class StateStore:
     """
     Load/save the per-chat state.json (persistent).
     """
+
     def __init__(self, state_path: str):
         self.state_path = state_path
 

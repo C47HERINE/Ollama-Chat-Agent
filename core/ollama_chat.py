@@ -1,7 +1,11 @@
-import json, os, requests
+import json
+import os
+import requests
+
 
 class OllamaChatbot:
     """Chat wrapper for Ollama."""
+
     def __init__(self):
         self._chat_id = None
         self.model = os.getenv("OLLAMA_MODEL") or ""
@@ -34,7 +38,7 @@ class OllamaChatbot:
             #     "top_p": 0.9,
             #     "repeat_penalty": 1.15
             #     }
-            }
+        }
 
         r = requests.post(url, json=payload, stream=True, timeout=180)
         r.raise_for_status()

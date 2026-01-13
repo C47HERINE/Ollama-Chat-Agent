@@ -23,4 +23,4 @@ def default_settings():
 
         "addon_post_send_cooldown_minutes": 2,
         "starter_post_send_cooldown_minutes": 180,
-        }
+    }

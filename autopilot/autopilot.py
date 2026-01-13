@@ -1,8 +1,10 @@
+import os
+
+import core.timeutils as t
+from . import policy, state
 from .config import default_settings
 from .prompts import build_prompt
-from . import policy, state
-import core.timeutils as t
-import os
+
 
 class AutoPilot:
     def __init__(self, tick_every_seconds=30, state_dir=None):
@@ -107,7 +109,7 @@ class AutoPilot:
             lines.append(
                 f"Scheduled: {scheduled_kind} at {fmt_ms(scheduled_ms)}" +
                 (f" (in ~{mins} min)" if mins is not None else "")
-                )
+            )
         else:
             lines.append("Scheduled: —")
 
@@ -116,7 +118,7 @@ class AutoPilot:
             lines.append(
                 f"Next re-engage target: {fmt_ms(reengage_ms)}" +
                 (f" (in ~{mins} min)" if mins is not None else "")
-                )
+            )
         else:
             lines.append("Next re-engage target: —")
 

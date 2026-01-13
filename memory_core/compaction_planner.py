@@ -1,9 +1,11 @@
 from memory_core.job_queue import JobQueue
 
+
 class CompactionPlanner:
     """
     Schedule jobs into state.jobs based on thresholds (does NOT run jobs).
     """
+
     def __init__(self, max_level_files: int, l0_max_msgs: int):
         self.max_level_files = int(max_level_files)
         self.l0_max_msgs = int(l0_max_msgs)

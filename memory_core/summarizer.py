@@ -1,9 +1,11 @@
 import core.ollama_chat
 
+
 class Summarizer:
     """
     Run summary/merge tasks through the LLM using prompt templates.
     """
+
     def __init__(self, llm, prompt_lib):
         self.llm = core.ollama_chat.OllamaChatbot()
         self.prompts = prompt_lib

@@ -1,5 +1,6 @@
 import core.timeutils as t
 
+
 def schedule_next_reengage(st, cfg):
     now = t.now_ms()
     min_ms = cfg["reengage_min_hours"] * 60 * 60 * 1000
@@ -15,10 +16,12 @@ def schedule_next_reengage(st, cfg):
             target += 24 * 60 * 60 * 1000
     st["next_reengage_ms"] = target
 
+
 def roll_cap_on_inbound(st, cfg):
     st["since_user_autonomous_count"] = 0
     st["since_user_autonomous_cap"] = int(
         t.pseudo_random_range(cfg["cap_min"], cfg["cap_max"] + 1))
+
 
 def can_send_autonomous(st, kind, cfg):
     if st.get("paused"):
@@ -34,6 +37,7 @@ def can_send_autonomous(st, kind, cfg):
             return False
     return True
 
+
 def maybe_schedule_addon_immediately(st, cfg, base_ms):
     if st.get("paused"):
         return
@@ -48,6 +52,7 @@ def maybe_schedule_addon_immediately(st, cfg, base_ms):
     base = base_ms + int(cfg["addon_min_seconds"] * 1000)
     st["scheduled_send_ms"] = base + t.jitter_ms(cfg["jitter_min_ms"], cfg["jitter_max_ms"])
     st["scheduled_kind"] = "addon"
+
 
 def should_schedule_addon(st, cfg):
     if not can_send_autonomous(st, "addon", cfg):
@@ -80,6 +85,7 @@ def should_schedule_addon(st, cfg):
         return False
     return True
 
+
 def should_schedule_starter(st, cfg):
     if not can_send_autonomous(st, "starter", cfg):
         return False
@@ -93,14 +99,17 @@ def should_schedule_starter(st, cfg):
         target = int(st.get("next_reengage_ms", 0))
     return t.now_ms() >= target
 
+
 def schedule_addon(st, cfg):
     base = t.now_ms() + int(cfg["addon_min_seconds"] * 1000)
     st["scheduled_send_ms"] = base + t.jitter_ms(cfg["jitter_min_ms"], cfg["jitter_max_ms"])
     st["scheduled_kind"] = "addon"
 
+
 def schedule_starter(st, cfg):
     st["scheduled_send_ms"] = t.now_ms() + t.jitter_ms(cfg["jitter_min_ms"], cfg["jitter_max_ms"])
     st["scheduled_kind"] = "starter"
+
 
 def apply_post_send_updates(st, kind, cfg):
     sent_ms = t.now_ms()

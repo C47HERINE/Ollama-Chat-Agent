@@ -1,12 +1,18 @@
+import json
+import os
+import requests
+import time
+
+from dotenv import load_dotenv
+
 from autopilot.autopilot import AutoPilot
 from core.ollama_chat import OllamaChatbot
 from core.telegram_bot import TelegramBot
 from core.voice_router import VoiceRouter
 from memory_core.memory_manager import MemoryManager
-from dotenv import load_dotenv
-import os, time, requests, json
 
 load_dotenv()
+
 
 def require_env(name: str) -> str:
     env_value = os.getenv(name)
@@ -14,7 +20,9 @@ def require_env(name: str) -> str:
         raise RuntimeError(f"Missing required environment variable: {name}")
     return env_value
 
+
 CHAT_REGISTRY_PATH = os.path.join("agent_state", "known_chats.json")
+
 
 def load_known_chats():
     if not os.path.exists(CHAT_REGISTRY_PATH):
@@ -33,18 +41,22 @@ def load_known_chats():
         pass
     return set()
 
+
 def save_known_chats(chat_ids):
     os.makedirs(os.path.dirname(CHAT_REGISTRY_PATH), exist_ok=True)
     with open(CHAT_REGISTRY_PATH, "w", encoding="utf-8") as f:
         json.dump(sorted(list(chat_ids)), f, indent=2)
+
 
 def remember_chat(chat_id, known):
     if chat_id not in known:
         known.add(chat_id)
         save_known_chats(known)
 
+
 MEM_CONFIG_PATH = os.path.join("config", "memory_config.json")
 PROMPTS_PATH = os.path.join("config", "prompts.json")
+
 
 def main():
     telegram_bot_token = require_env("TELEGRAM_BOT_TOKEN")
@@ -208,6 +220,7 @@ def main():
         except Exception as e:
             print(f"[UNEXPECTED_ERROR] {e}")
             time.sleep(2)
+
 
 if __name__ == "__main__":
     main()

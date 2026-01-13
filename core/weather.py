@@ -1,11 +1,17 @@
+import json
+import os
+import requests
+
 from dotenv import load_dotenv
+
 import core.timeutils as core_time
-import os, json, requests
 
 load_dotenv()
 
+
 class WeatherInjector:
     """Hourly background context injection (based on local date + hour)."""
+
     def __init__(self, low_dir="./user/low", state_file="weather_state.json"):
         self.state_dir = low_dir
         self.state_path = os.path.join(low_dir, state_file)
@@ -114,7 +120,7 @@ class WeatherInjector:
             f"• Local time: {dt.strftime('%H:%M')} — {core_time.time_of_day_label(dt.hour)}",
             f"• Sunrise: {sunrise}",
             f"• Sunset: {sunset}",
-            ]
+        ]
         if weather_line:
             lines.append(weather_line)
         return "\n".join(lines)
