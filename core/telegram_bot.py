@@ -1,5 +1,4 @@
 import os
-
 import requests
 
 
@@ -10,21 +9,22 @@ class TelegramBot:
 
     def get_updates(self, offset=None, timeout=30):
         method = "getUpdates"
-        params = {"timeout": timeout}
+        parameters = {"timeout": timeout}
         if offset is not None:
-            params["offset"] = offset
-        r = requests.get(self.base_url + method, params=params, timeout=timeout + 30)
+            parameters["offset"] = offset
+        r = requests.get(self.base_url + method, params=parameters, timeout=timeout + 30)
         r.raise_for_status()
         return r.json()
 
-    def send_message(self, chat_id, text, disable_web_page_preview=True):
+    def send_message(self, chat_id, text):
+        disable_web_page_preview = True
         method = "sendMessage"
-        params = {
+        parameters = {
             "chat_id": chat_id,
             "text": text,
             "disable_web_page_preview": disable_web_page_preview,
-        }
-        r = requests.post(self.base_url + method, params=params, timeout=60)
+            }
+        r = requests.post(self.base_url + method, params=parameters, timeout=60)
         r.raise_for_status()
         return r.json()
 
@@ -37,15 +37,15 @@ class TelegramBot:
             data = {"chat_id": chat_id}
             if caption:
                 data["caption"] = caption
-            r = requests.post(self.base_url + method, data=data, files=files, timeout=120)
-        r.raise_for_status()
-        return r.json()
+            request_post = requests.post(self.base_url + method, data=data, files=files, timeout=120)
+        request_post.raise_for_status()
+        return request_post.json()
 
     def extract_messages(self, updates):
         results = updates.get("result") or []
-        for upd in results:
-            update_id = upd.get("update_id")
-            msg = upd.get("message") or upd.get("edited_message")
+        for update in results:
+            update_id = update.get("update_id")
+            msg = update.get("message") or update.get("edited_message")
             if not msg:
                 continue
             chat = msg.get("chat") or {}
