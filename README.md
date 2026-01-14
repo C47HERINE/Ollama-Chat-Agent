@@ -19,6 +19,7 @@ The agent:
 - Injects strictly capped context for every inference
 - Sends autonomous messages based on silence and timing rules
 - Produces text or voice output depending on length or command
+- Integrates external environment data via REST APIs
 - Runs continuously with no cloud dependencies
 
 This project is designed as a portfolio-grade systems demo, emphasizing stateful agents, context orchestration, deterministic bounds, and long-running stability.
@@ -72,6 +73,9 @@ Memory levels:
 All summaries are immutable once written.  
 No memory file is ever deleted or overwritten.
 
+Compaction is executed as a serialized background process.  
+Only one compaction task runs at a time; additional tasks are queued and prioritized via a persistent state file to prevent concurrent writes and runaway processing.
+
 ---
 
 ### 🧠 Context Injection (Strictly Bounded)
@@ -86,7 +90,19 @@ At inference time, the agent injects at most:
 
 Each tier has its own length cap.
 
-Context is rebuilt only when memory changes (for example, during compaction), minimizing disk I/O and recomputation.
+Context is rebuilt only when memory changes (for example, during compaction), minimizing disk I/O, recomputation, and unnecessary inference overhead.
+
+---
+
+### 🌦️ Environment Awareness
+
+The agent can incorporate background world state (such as weather) by consuming third-party REST APIs.
+
+- External data is fetched via HTTP and parsed from JSON
+- Errors are handled explicitly to avoid contaminating conversation flow
+- Environment data is injected as system-only context and never surfaced directly unless relevant
+
+This allows the agent to remain context-aware without polluting user-visible messages.
 
 ---
 
@@ -101,7 +117,8 @@ Context is rebuilt only when memory changes (for example, during compaction), mi
   - Always outside quiet hours  
   - Subject to strict cooldowns
 
-AutoPilot is pausable per chat and never fires recursively.
+AutoPilot is pausable per chat and never fires recursively.  
+All autonomous actions are logged internally for traceability.
 
 ---
 
@@ -122,20 +139,20 @@ AutoPilot is pausable per chat and never fires recursively.
 
 Clear separation of responsibilities:
 
-- core/ — Telegram I/O, Ollama calls, TTS routing, environment data  
-- memory_core/ — Logs, compaction, summarization, context building  
-- autopilot/ — Scheduling, policies, cooldowns  
-- config/ — Declarative configuration and prompts  
+- core/ — Telegram I/O, Ollama calls, TTS routing, environment data retrieval  
+- memory_core/ — Logs, memory compaction, summarization, context building, state tracking  
+- autopilot/ — Scheduling, policies, cooldowns, autonomous behavior  
+- config/ — Declarative configuration and prompt templates  
 
-Designed for extension without refactors.
+The system is designed so that operational concerns (memory safety, serialization, error handling) are enforced by structure rather than convention.
 
 ---
 
 ## Model & Runtime
 
 - LLM: gemma3:12b
-- Persona: baked into the model via ollama create -f Modelfile  
-  External system prompt injection is temporarily disabled
+- Persona: baked into the model via `ollama create -f Modelfile`  
+  External system prompt injection is temporarily disabled due to Ollama behavior
 - Context length: < 32k (bounded by design)
 - Hardware tested: RTX 5070 Ti
 - Observed behavior: fast inference, stable memory, no lag
@@ -144,7 +161,7 @@ Designed for extension without refactors.
 
 ## Environment Variables
 
-Create a .env file:
+Create a `.env` file:
 
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token  
 OLLAMA_HOST=http://localhost:11434  
@@ -155,7 +172,7 @@ VOICE_EXAGGERATION=0.5
 VOICE_CFG_WEIGHT=0.5  
 TEMPERATURE=0.8  
 
-An example is provided as .env.example.
+An example is provided as `.env.example`.
 
 ---
 
@@ -165,44 +182,38 @@ Requirements:
 - Python 3.10+
 - Telegram Bot Token
 - Local Ollama installation
-- Pulled Ollama model (ollama run gemma3:12b) 
+- Pulled Ollama model (`ollama run gemma3:12b`)
 
-Option A)
-
-On Windows simply run:
+Option A — Windows scripts:
 
 1) install.bat  
-
 2) run.bat  
 
+Option B — Manual install:
 
-Option B)
-
-Install dependencies:
-
-1) Activate virtual environment
+1) Activate virtual environment  
    .venv\Scripts\activate
 
-2) Upgrade pip
+2) Upgrade pip  
    python -m pip install --upgrade pip
 
-3) Install base dependencies
+3) Install base dependencies  
    python -m pip install -r requirements.txt
 
-4) Install environment variable support
+4) Install environment variable support  
    python -m pip install python-dotenv
 
-5) Install Chatterbox TTS
+5) Install Chatterbox TTS  
    python -m pip install chatterbox-tts
 
-6) Remove any existing PyTorch installs
+6) Remove any existing PyTorch installs  
    python -m pip uninstall -y torch torchvision torchaudio
 
-7) Install PyTorch with CUDA 12.8 support
-   python -m pip install ^
-     torch==2.7.1+cu128 ^
-     torchvision==0.22.1+cu128 ^
-     torchaudio==2.7.1+cu128 ^
+7) Install PyTorch with CUDA 12.8 support  
+   python -m pip install ^  
+     torch==2.7.1+cu128 ^  
+     torchvision==0.22.1+cu128 ^  
+     torchaudio==2.7.1+cu128 ^  
      --index-url https://download.pytorch.org/whl/cu128
 
 Run:
