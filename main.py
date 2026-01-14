@@ -137,10 +137,8 @@ def main():
                 for chat_id, text, user_first, update_id in telegram.extract_messages(updates):
                     offset = update_id + 1
                     text = (text or "").strip()
-
                     remember_chat(chat_id, known_chats)
                     autopilot.register_chat(chat_id)
-
                     _memory_manager = get_memory_manager(chat_id)
 
                     # ---- Commands (minimal) ----
@@ -148,8 +146,6 @@ def main():
                         reply = f"Hi {user_first}! I'm online."
                         telegram.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
-
-                        _memory_manager.on_message("assistant", reply, kind="command_start")
                         _memory_manager.after_assistant_sent()
                         continue
 
@@ -160,8 +156,6 @@ def main():
                         reply = "Paused. I won't initiate messages here."
                         telegram.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
-
-                        _memory_manager.on_message("assistant", reply, kind="command_pause")
                         _memory_manager.after_assistant_sent()
                         continue
 
@@ -172,16 +166,12 @@ def main():
                         reply = "Resumed. I may initiate messages again."
                         telegram.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
-
-                        _memory_manager.on_message("assistant", reply, kind="command_resume")
                         _memory_manager.after_assistant_sent()
                         continue
 
                     if text == "/status":
                         reply = autopilot.format_status(chat_id) or ""
                         telegram.send_message(chat_id, reply)
-
-                        _memory_manager.on_message("assistant", reply, kind="command_status")
                         _memory_manager.after_assistant_sent()
                         continue
 

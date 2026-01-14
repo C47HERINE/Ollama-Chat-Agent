@@ -139,7 +139,7 @@ class MemoryManager:
         return self.cache.render_string(self.config["injection_order"])
 
     def after_assistant_sent(self) -> bool:
-        # Run exactly one compaction job (if any)
+        """Run exactly one compaction job (if any)"""
         ran = self.runner.run_one()
         if ran:
             state = self.state_store.load()
