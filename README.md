@@ -1,221 +1,246 @@
-🤖 Autonomous Chat Agent (Telegram + Ollama)
+# 🤖 Autonomous Chat Agent (Telegram + Ollama)
 
-An experimental autonomous conversational agent built in Python, designed to behave like a real person texting over
-time.
+An experimental systems-level autonomous chat agent written in Python, designed to behave like a real person texting over time.
 
-This project is a **systems-level AI agent**, not a prompt toy: it combines local LLM inference, persistent memory,
-autonomous scheduling, contextual awareness, and multi-modal output (text + voice).
+This is not a prompt wrapper.  
+It is a long-running, stateful agent combining local LLM inference, persistent memory, autonomous scheduling, contextual awareness, and multi-modal output (text + voice).
 
---------------------------------------------------
+The focus is on architecture, invariants, and durability, not novelty prompts.
 
-OVERVIEW
+---
+
+## Overview
 
 The agent:
 
-- Replies to Telegram messages using a **local Ollama LLM**
-- Maintains **persistent, per-chat memory** across restarts
-- Builds and injects **prioritized context** automatically
-- Generates **autonomous messages** based on time, silence, and rules
-- Produces **text or voice messages** depending on content and length
-- Runs continuously with low resource usage
+- Replies to Telegram messages using a local Ollama LLM
+- Maintains persistent, file-backed memory per chat
+- Compresses conversation history into bounded hierarchical memory
+- Injects strictly capped context for every inference
+- Sends autonomous messages based on silence and timing rules
+- Produces text or voice output depending on length or command
+- Runs continuously with no cloud dependencies
 
-The project is intentionally designed as a **portfolio-grade architecture demo**, emphasizing:
+This project is designed as a portfolio-grade systems demo, emphasizing stateful agents, context orchestration, deterministic bounds, and long-running stability.
 
-- State management
-- Context orchestration
-- Agent autonomy
-- Robust long-running behavior
+---
 
---------------------------------------------------
+## Key Features
 
-KEY FEATURES
+### 🧠 Persistent Conversational Memory
 
-🧠 Conversational Memory Engine
-
-- Per-chat daily raw conversation logs (JSON)
+- Per-chat raw conversation logs (JSON, append-only)
+- Messages are strictly separated by role:
+  - User
+  - Assistant
+  - Internal/system events
 - Memory persists across restarts
-- Clear separation of:
-    - User messages
-    - Assistant replies
-    - System-only internal events
-- Memory drives context, summaries, and autonomy
+- Raw logs are never deleted or rewritten
+- Conversation memory is excluded from Git
 
-🧩 Context Builder (Priority-Based)
-Context is rebuilt dynamically and injected into the LLM with strict priority:
+Raw logs are the source of truth for all higher-level memory.
 
-1. System prompts (personality, rules)
-2. Static user context
-3. Raw conversation (today + yesterday)
-4. Latest carried summaries (daily / weekly / monthly / yearly)
+---
 
-- Context rebuilds only when inputs change
-- Signature-based change detection (cheap + efficient)
-- Automatic size control (LLM-safe)
+### 🧩 Hierarchical Memory Compaction
 
-🧠 Introspection & Summarization (Internal Only)
+To prevent unbounded context growth while preserving semantic continuity, the agent uses LLM-driven hierarchical summarization.
 
-- Introspection runs periodically to analyze conversation state
-- Reveries and internal thoughts are **never sent to the user**
-- Scheduled summaries:
-    - Daily
-    - Weekly
-    - Monthly
-    - Yearly
-- Summaries are stored separately and selectively reinjected as context
+Memory levels:
 
-🤖 Autonomous Behavior (AutoPilot)
+- Level 0 (Raw)  
+  Unlimited raw messages on disk
 
-- Sends natural follow-up messages after replies
-- Re-engages conversations after long silence (4–24h)
-- Respects quiet hours
-- Uses soft randomness for human-like timing
-- Cooldown rules prevent spammy behavior
-- Fully pausable per chat
+- Level 1 (L1)  
+  - Every 60 messages  
+  - Last 30 summarized  
+  - Strict length cap
 
-🌦️ Background World Injection
+- Level 2 (L2)  
+  - Triggered at 3 L1 files  
+  - Last 2 L1 files summarized
 
-- Periodic environment updates (e.g. weather)
-- Injected as **system context only**
-- Logged internally without polluting conversation flow
-- Never directly surfaced unless relevant
+- Level 3 (L3)  
+  - Triggered at 3 L2 files  
+  - Last 2 L2 files summarized
 
-🎙️ Voice Routing (Text-to-Speech)
+- Master Memory  
+  - Triggered at 3 L3 files  
+  - Existing master + last 2 L3 files summarized together  
+  - Produces a new master file (compression, not appending)
 
-- Automatic voice memo generation for long messages
-- `/voice` command forces voice output
-- Clean separation between:
-    - Raw text (for Telegram)
-    - Cleaned text (for TTS)
-- Sentence-aware batching for natural speech
-- Local TTS inference (no external APIs)
+All summaries are immutable once written.  
+No memory file is ever deleted or overwritten.
 
-🧱 Modular Architecture
-Clear separation of concerns:
+---
 
-- Telegram I/O
-- LLM interaction (Ollama)
-- Memory engine
-- Context builder
-- AutoPilot logic
-- Voice router
-- Background services (weather, scheduling)
+### 🧠 Context Injection (Strictly Bounded)
+
+At inference time, the agent injects at most:
+
+- ≤ 60 recent raw messages  
+- ≤ 3 L1 summaries  
+- ≤ 3 L2 summaries  
+- ≤ 3 L3 summaries  
+- ≤ 1 master memory  
+
+Each tier has its own length cap.
+
+Context is rebuilt only when memory changes (for example, during compaction), minimizing disk I/O and recomputation.
+
+---
+
+### 🤖 Autonomous Behavior (AutoPilot)
+
+- Add-on messages  
+  - Short-range follow-ups after a reply if the conversation stalls  
+  - Controlled by probability, delay, and per-chat caps
+
+- Conversation starters  
+  - Triggered after multiple hours of silence  
+  - Always outside quiet hours  
+  - Subject to strict cooldowns
+
+AutoPilot is pausable per chat and never fires recursively.
+
+---
+
+### 🎙️ Voice Output (Local TTS)
+
+- Text is the default output
+- Voice output is triggered by:
+  - Message length thresholds
+  - Explicit /voice command
+- Uses Chatterbox TTS (fully local)
+- Supports custom voices from ~10s audio samples
+- Sentence-aware chunking allows very long voice memos
+- Voice generation never alters stored text memory
+
+---
+
+### 🧱 Modular Architecture
+
+Clear separation of responsibilities:
+
+- core/ — Telegram I/O, Ollama calls, TTS routing, environment data  
+- memory_core/ — Logs, compaction, summarization, context building  
+- autopilot/ — Scheduling, policies, cooldowns  
+- config/ — Declarative configuration and prompts  
 
 Designed for extension without refactors.
 
---------------------------------------------------
+---
 
-ENVIRONMENT VARIABLES
+## Model & Runtime
 
-Create a `.env` file:
+- LLM: gemma3:12b
+- Persona: baked into the model via ollama create -f Modelfile  
+  External system prompt injection is temporarily disabled
+- Context length: < 32k (bounded by design)
+- Hardware tested: RTX 5070 Ti
+- Observed behavior: fast inference, stable memory, no lag
 
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-OLLAMA_HOST=[http://localhost:11434](http://localhost:11434)
-OLLAMA_MODEL=gemma3:12b
+---
 
-# Optional (voice)
+## Environment Variables
 
-VOICE_PROMPT_WAV=path/to/voice.wav
-VOICE_EXAGGERATION=0.5
-VOICE_CFG_WEIGHT=0.5
-TEMPERATURE=0.8
+Create a .env file:
 
-An example file is provided as `.env.example`.
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token  
+OLLAMA_HOST=http://localhost:11434  
+OLLAMA_MODEL=gemma3:12b  
 
---------------------------------------------------
+VOICE_PROMPT_WAV=path/to/voice.wav  
+VOICE_EXAGGERATION=0.5  
+VOICE_CFG_WEIGHT=0.5  
+TEMPERATURE=0.8  
 
-GETTING STARTED
+An example is provided as .env.example.
 
-Requirements
+---
 
+## Getting Started
+
+Requirements:
 - Python 3.10+
 - Telegram Bot Token
 - Local Ollama installation
-- A supported Ollama model pulled (e.g. gemma3:12b)
+- Pulled Ollama model (ollama run gemma3:12b) 
 
-Install dependencies
+Option A)
 
-pip install -r requirements.txt
+On Windows simply run:
 
-Run the agent
+1) install.bat  
 
+2) run.bat  
+
+
+Option B)
+
+Install dependencies:
+
+1) Activate virtual environment
+   .venv\Scripts\activate
+
+2) Upgrade pip
+   python -m pip install --upgrade pip
+
+3) Install base dependencies
+   python -m pip install -r requirements.txt
+
+4) Install environment variable support
+   python -m pip install python-dotenv
+
+5) Install Chatterbox TTS
+   python -m pip install chatterbox-tts
+
+6) Remove any existing PyTorch installs
+   python -m pip uninstall -y torch torchvision torchaudio
+
+7) Install PyTorch with CUDA 12.8 support
+   python -m pip install ^
+     torch==2.7.1+cu128 ^
+     torchvision==0.22.1+cu128 ^
+     torchaudio==2.7.1+cu128 ^
+     --index-url https://download.pytorch.org/whl/cu128
+
+Run:
 python main.py
 
-or on Windows:
-run install.bat
+---
 
-launch using:
-start.bat
+## Telegram Commands
 
+- /start — Basic greeting  
+- /pause — Disable autonomous messages  
+- /resume — Re-enable autonomous messages  
+- /status — Show internal agent status  
 
---------------------------------------------------
+---
 
-TELEGRAM COMMANDS
-
-/start Basic greeting  
-/pause Disable autonomous messages  
-/resume Re-enable autonomous messages  
-/status Show internal agent status
-
---------------------------------------------------
-
-SYSTEM PROMPTS & STATIC CONTEXT
-
-The agent automatically loads files from:
-
-- `user/system_prompt/`
-- `user/context/`
-
-Supported formats:
-
-- `.json`
-- `.md`
-- `.txt`
-
-Changes are detected automatically:
-
-- No restart required
-- Memory is preserved
-- Context rebuilds only when necessary
-
---------------------------------------------------
-
-DESIGN PHILOSOPHY
-
-This project prioritizes:
+## Design Philosophy
 
 - Stateful agents over stateless chat
-- Deterministic rules combined with randomness
-- Clear internal boundaries
-- Long-running stability
-- Observability via structured logs
-- Extensibility over clever hacks
+- Deterministic bounds over clever retrieval
+- Compression over deletion
+- Clear invariants over heuristics
+- Local-first execution
 
-It is intentionally **not** a thin wrapper around an LLM.
+This is intentionally not a thin wrapper around an LLM.
 
---------------------------------------------------
+---
 
-PLANNED / POSSIBLE EXTENSIONS
+## Planned / Exploratory Extensions
 
-- Additional world injectors (events, news, calendars)
-- Emotion / tone tracking
-- Multi-agent coordination
-- Multi-platform support (Messenger, SMS, Web)
-- External tool calling
-- Memory compression strategies
-- UI dashboard for state inspection
+- Vision support (Telegram image input)
+- User voice messages + local STT
+- Typing / recording indicators
+- Tool usage (model-native or scripted)
+- Fully self-hosted model (no Ollama dependency)
 
---------------------------------------------------
+---
 
-NOTES
-
-- Uses **local models only**
-- No cloud dependencies
-- Conversation logs and memory files are excluded from Git
-- Secrets handled exclusively via environment variables
-- Designed to run continuously with minimal CPU usage
-
---------------------------------------------------
-
-LICENSE
+## License
 
 MIT — free to explore, learn, and adapt.
