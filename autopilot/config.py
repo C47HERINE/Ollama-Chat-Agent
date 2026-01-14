@@ -9,11 +9,11 @@ def default_settings():
         "addon_min_seconds": 30,
         "addon_max_seconds": 10 * 60,
 
-        "cap_min": 0,
+        "cap_min": 1,
         "cap_max": 2,
 
-        "quiet_start_hour": 22,
-        "quiet_end_hour": 9,
+        "quiet_start_hour": 23,
+        "quiet_end_hour": 7,
 
         "reengage_min_hours": 4,
         "reengage_max_hours": 24,

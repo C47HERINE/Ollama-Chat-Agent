@@ -11,8 +11,8 @@
     "max_per_assistant_msg": 1
   },
   "injection_order": [
-    "user_context",
     "low",
+    "user_context",
     "l1",
     "l2",
     "l3",

@@ -1,57 +1,57 @@
 import core.timeutils as t
 
 
-def schedule_next_reengage(st, cfg):
+def schedule_next_reengage(state, config):
     now = t.now_ms()
-    min_ms = cfg["reengage_min_hours"] * 60 * 60 * 1000
-    max_ms = cfg["reengage_max_hours"] * 60 * 60 * 1000
+    min_ms = config["reengage_min_hours"] * 60 * 60 * 1000
+    max_ms = config["reengage_max_hours"] * 60 * 60 * 1000
     delay = t.pseudo_random_range(min_ms, max_ms)
     target = now + delay
     lt = t.time.localtime(target / 1000)
     hour = lt.tm_hour
-    if t.is_quiet_hours(hour, cfg["quiet_start_hour"], cfg["quiet_end_hour"]):
+    if t.is_quiet_hours(hour, config["quiet_start_hour"], config["quiet_end_hour"]):
         day_start = int(t.time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)) * 1000)
-        target = day_start + cfg["quiet_end_hour"] * 60 * 60 * 1000
+        target = day_start + config["quiet_end_hour"] * 60 * 60 * 1000
         if target <= now:
             target += 24 * 60 * 60 * 1000
-    st["next_reengage_ms"] = target
+    state["next_reengage_ms"] = target
 
 
-def roll_cap_on_inbound(st, cfg):
-    st["since_user_autonomous_count"] = 0
-    st["since_user_autonomous_cap"] = int(
-        t.pseudo_random_range(cfg["cap_min"], cfg["cap_max"] + 1))
+def roll_cap_on_inbound(state, config):
+    state["since_user_autonomous_count"] = 0
+    state["since_user_autonomous_cap"] = int(
+        t.pseudo_random_range(config["cap_min"], config["cap_max"] + 1))
 
 
-def can_send_autonomous(st, kind, cfg):
-    if st.get("paused"):
+def can_send_autonomous(state, kind, config):
+    if state.get("paused"):
         return False
-    if t.is_quiet_hours(t.local_dt().hour, cfg["quiet_start_hour"], cfg["quiet_end_hour"]):
+    if t.is_quiet_hours(t.local_dt().hour, config["quiet_start_hour"], config["quiet_end_hour"]):
         return False
-    if t.now_ms() < st.get("next_eligible_send_ms", 0):
+    if t.now_ms() < state.get("next_eligible_send_ms", 0):
         return False
     if kind != "starter":
-        used = int(st.get("since_user_autonomous_count", 0))
-        cap = int(st.get("since_user_autonomous_cap", 0))
+        used = int(state.get("since_user_autonomous_count", 0))
+        cap = int(state.get("since_user_autonomous_cap", 0))
         if used >= cap:
             return False
     return True
 
 
-def maybe_schedule_addon_immediately(st, cfg, base_ms):
-    if st.get("paused"):
+def maybe_schedule_addon_immediately(state, cfg, base_ms):
+    if state.get("paused"):
         return
     if t.is_quiet_hours(t.local_dt().hour, cfg["quiet_start_hour"], cfg["quiet_end_hour"]):
         return
-    used = int(st.get("since_user_autonomous_count", 0))
-    cap = int(st.get("since_user_autonomous_cap", 0))
+    used = int(state.get("since_user_autonomous_count", 0))
+    cap = int(state.get("since_user_autonomous_cap", 0))
     if used >= cap:
         return
-    if int(st.get("scheduled_send_ms", 0)) != 0:
+    if int(state.get("scheduled_send_ms", 0)) != 0:
         return
     base = base_ms + int(cfg["addon_min_seconds"] * 1000)
-    st["scheduled_send_ms"] = base + t.jitter_ms(cfg["jitter_min_ms"], cfg["jitter_max_ms"])
-    st["scheduled_kind"] = "addon"
+    state["scheduled_send_ms"] = base + t.jitter_ms(cfg["jitter_min_ms"], cfg["jitter_max_ms"])
+    state["scheduled_kind"] = "addon"
 
 
 def should_schedule_addon(st, cfg):

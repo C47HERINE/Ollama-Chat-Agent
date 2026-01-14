@@ -30,16 +30,8 @@ class OllamaChatbot:
         payload = {
             "model": self.model,
             "messages": messages,
-            "stream": True,
-            # "options": {
-            #     "num_ctx": 32768,
-            #     "num_predict": 250,
-            #     "temperature": 0.4,
-            #     "top_p": 0.9,
-            #     "repeat_penalty": 1.15
-            #     }
-        }
-
+            "stream": True
+            }
         r = requests.post(url, json=payload, stream=True, timeout=180)
         r.raise_for_status()
         full_text = ""
@@ -75,6 +67,5 @@ class OllamaChatbot:
         """ Custom message builder"""
         with open("./user/system/system_prompt.txt", "r") as f:
             system_prompt = f.read().strip()
-
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": (user_text or "")}]
         return self.ask_messages(messages, stream_to_console=stream_to_console)

@@ -104,10 +104,10 @@ def main():
         if not text_to_send:
             return
 
-        memory_manager = get_memory_manager(telegram_chat_id)
+        _memory_manager = get_memory_manager(telegram_chat_id)
 
         # log assistant message (L0) and update context
-        memory_manager.on_message("assistant", text_to_send, kind="autopilot")
+        _memory_manager.on_message("assistant", text_to_send, kind="autopilot")
 
         # send to telegram
         _kind, _sent_text = voice.send(telegram, telegram_chat_id, text_to_send)

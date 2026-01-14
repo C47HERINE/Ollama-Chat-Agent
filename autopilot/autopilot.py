@@ -8,12 +8,12 @@ from .prompts import build_prompt
 
 class AutoPilot:
     def __init__(self, tick_every_seconds=30, state_dir=None):
-        self.cfg = default_settings()
-        self.cfg["tick_every_seconds"] = tick_every_seconds
+        self.config = default_settings()
+        self.config["tick_every_seconds"] = tick_every_seconds
         if state_dir is not None:
-            self.cfg["state_dir"] = state_dir
+            self.config["state_dir"] = state_dir
         self.tick_every_seconds = tick_every_seconds
-        self.state_dir = self.cfg["state_dir"]
+        self.state_dir = self.config["state_dir"]
         self.known_chats = set()
         self.next_tick_s = t.now_s() + tick_every_seconds
 
@@ -35,30 +35,30 @@ class AutoPilot:
 
     def observe_inbound(self, chat_id, text):
         self.register_chat(chat_id)
-        st = self.load_state(chat_id)
-        policy.roll_cap_on_inbound(st, self.cfg)
+        _state = self.load_state(chat_id)
+        policy.roll_cap_on_inbound(_state, self.config)
         ms = t.now_ms()
-        st["last_inbound_ms"] = ms
-        st["last_inbound_text"] = text
-        st["last_activity_ms"] = max(st.get("last_activity_ms", 0), ms)
-        st["scheduled_send_ms"] = 0
-        st["scheduled_kind"] = ""
-        st["pending_inbound_count"] = int(st.get("pending_inbound_count", 0)) + 1
-        policy.schedule_next_reengage(st, self.cfg)
-        self.save_state(chat_id, st)
+        _state["last_inbound_ms"] = ms
+        _state["last_inbound_text"] = text
+        _state["last_activity_ms"] = max(_state.get("last_activity_ms", 0), ms)
+        _state["scheduled_send_ms"] = 0
+        _state["scheduled_kind"] = ""
+        _state["pending_inbound_count"] = int(_state.get("pending_inbound_count", 0)) + 1
+        policy.schedule_next_reengage(_state, self.config)
+        self.save_state(chat_id, _state)
 
     def observe_outbound(self, chat_id, text, cooldown_minutes=60, allow_addon=False):
         self.register_chat(chat_id)
-        st = self.load_state(chat_id)
+        _state = self.load_state(chat_id)
         ms = t.now_ms()
-        st["last_outbound_ms"] = ms
-        st["last_outbound_text"] = text
-        st["last_activity_ms"] = max(st.get("last_activity_ms", 0), ms)
-        st["pending_inbound_count"] = 0
-        st["next_eligible_send_ms"] = ms + int(cooldown_minutes * 60 * 1000)
+        _state["last_outbound_ms"] = ms
+        _state["last_outbound_text"] = text
+        _state["last_activity_ms"] = max(_state.get("last_activity_ms", 0), ms)
+        _state["pending_inbound_count"] = 0
+        _state["next_eligible_send_ms"] = ms + int(cooldown_minutes * 60 * 1000)
         if allow_addon:
-            policy.maybe_schedule_addon_immediately(st, self.cfg, base_ms=ms)
-        self.save_state(chat_id, st)
+            policy.maybe_schedule_addon_immediately(_state, self.config, base_ms=ms)
+        self.save_state(chat_id, _state)
 
     def format_status(self, chat_id):
         st = self.load_state(chat_id)
@@ -146,18 +146,18 @@ class AutoPilot:
                 if text:
                     send_fn(chat_id, text)
                     st["last_outbound_text"] = text
-                    policy.apply_post_send_updates(st, kind, self.cfg)
+                    policy.apply_post_send_updates(st, kind, self.config)
                 self.save_state(chat_id, st)
                 continue
             if st.get("scheduled_send_ms", 0):
                 self.save_state(chat_id, st)
                 continue
-            if policy.should_schedule_addon(st, self.cfg):
-                policy.schedule_addon(st, self.cfg)
+            if policy.should_schedule_addon(st, self.config):
+                policy.schedule_addon(st, self.config)
                 self.save_state(chat_id, st)
                 continue
-            if policy.should_schedule_starter(st, self.cfg):
-                policy.schedule_starter(st, self.cfg)
+            if policy.should_schedule_starter(st, self.config):
+                policy.schedule_starter(st, self.config)
                 self.save_state(chat_id, st)
                 continue
 
