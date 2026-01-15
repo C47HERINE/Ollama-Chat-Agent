@@ -40,7 +40,7 @@ class MemoryManager:
         )
 
         self.prompts = PromptLibrary(prompts_path)
-        self.summarizer = Summarizer(llm=llm, prompt_lib=self.prompts)
+        self.summarizer = Summarizer(prompt_lib=self.prompts)
 
         self.planner = CompactionPlanner(
             max_level_files=int(self.config["levels"]["max_files"]),

@@ -149,7 +149,7 @@ class AutoPilot:
 
                 st["scheduled_send_ms"] = 0
                 st["scheduled_kind"] = ""
-                text = (generate_fn(chat_id, prompt) or "").strip()
+                text = (generate_fn(prompt) or "").strip()
                 if text:
                     send_fn(chat_id, text)
                     st["last_outbound_text"] = text

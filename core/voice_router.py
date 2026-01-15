@@ -6,60 +6,21 @@ import numpy as np
 import torch
 from chatterbox.tts import ChatterboxTTS
 
-
 class VoiceRouter:
     """Route assistant output to Telegram as text or a single voice memo."""
 
-    def __init__(
-        self,
-        audio_out_path="./user/voice/temp/voice_memo.wav",
-        threshold_chars=250,
-        voice_command="/voice",
-        device="cuda",
-        audio_prompt_path=None,
-        exaggeration=None,
-        cfg_weight=None,
-        temperature=None,
-        batch_target_chars=250,
-        batch_max_chars=500,
-    ):
-
-        env_prompt = os.getenv("VOICE_PROMPT_WAV")
-        env_exaggeration = os.getenv("VOICE_EXAGGERATION")
-        env_cfg = os.getenv("VOICE_CFG_WEIGHT")
-        env_temperature = os.getenv("TEMPERATURE")
-
-        self.audio_out_path = audio_out_path
-        self.threshold_chars = int(threshold_chars)
-        self.voice_command = voice_command
-        self.batch_target_chars = int(batch_target_chars)
-        self.batch_max_chars = int(batch_max_chars)
-        self.model = None
-
-        self.audio_prompt_path = (
-            audio_prompt_path if audio_prompt_path is not None else (env_prompt or None)
-        )
-        self.exaggeration = (
-            float(exaggeration)
-            if exaggeration is not None
-            else (float(env_exaggeration) if env_exaggeration else 0.5)
-        )
-        self.cfg_weight = (
-            float(cfg_weight) if cfg_weight is not None else (float(env_cfg) if env_cfg else 0.5)
-        )
-        self.temperature = (
-            float(temperature)
-            if temperature is not None
-            else (float(env_temperature) if temperature else 0.8)
-        )
-        if device:
-            self.device = device
-        else:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    def ensure_model(self):
-        if self.model is None:
-            self.model = ChatterboxTTS.from_pretrained(device=self.device)
+    def __init__(self):
+        self.cfg_weight = os.getenv("VOICE_CFG_WEIGHT")
+        self.audio_prompt_path = os.getenv("VOICE_PROMPT_WAV")
+        self.exaggeration = os.getenv("VOICE_EXAGGERATION")
+        self.temperature = os.getenv("TEMPERATURE")
+        self.audio_out_path = "./user/voice/temp/voice_memo.wav"
+        self.voice_command = "/voice"
+        self.threshold_chars = 250
+        self.batch_target_chars = 250
+        self.batch_max_chars = 500
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = ChatterboxTTS.from_pretrained(device=self.device)
 
     def remove_emojis(self, text: str) -> str:
         if not text:
@@ -91,7 +52,7 @@ class VoiceRouter:
         t = t.replace("\\n", " ")
         t = t.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
 
-        # --- Remove markdown emphasis that causes repetition ---
+        # --- Remove Markdown emphasis that causes repetition ---
         # *word* / **word** / _word_
         t = re.sub(r"[*_]{1,2}([^*_]+)[*_]{1,2}", r"\1", t)
 
@@ -248,16 +209,12 @@ class VoiceRouter:
             wf.writeframes(pcm.tobytes())
 
     def render_voice(self, text: str):
-        self.ensure_model()
-
         base = self.clean_text_for_tts(text)
         if not base:
             base = "..."
-
         chunks = self.split_into_sentence_chunks(base)
         if not chunks:
             chunks = ["..."]
-
         wavs = []
         for c in chunks:
             c = c.strip()
