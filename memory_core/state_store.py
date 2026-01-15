@@ -14,13 +14,7 @@ class StateStore:
     def ensure_exists(self) -> None:
         if os.path.exists(self.state_path):
             return
-        self.save({
-            "l1_active": [],
-            "l2_active": [],
-            "l3_active": [],
-            "jobs": [],
-            "ephemeral": {}
-        })
+        self.save({"l1_active": [], "l2_active": [], "l3_active": [], "jobs": [], "ephemeral": {}})
 
     def load(self) -> dict:
         state = read_json(self.state_path)

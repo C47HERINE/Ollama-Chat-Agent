@@ -2,6 +2,7 @@ class JobQueue:
     """
     Manage a persistent list of jobs with priority order.
     """
+
     PRIORITY = {
         "COMPACT_L3_TO_L4": 1,
         "COMPACT_L2_TO_L3": 2,

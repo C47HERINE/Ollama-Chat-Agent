@@ -1,8 +1,8 @@
 import json
 import os
-import requests
 import time
 
+import requests
 from dotenv import load_dotenv
 
 from autopilot.autopilot import AutoPilot
@@ -28,7 +28,7 @@ def load_known_chats():
     if not os.path.exists(CHAT_REGISTRY_PATH):
         return set()
     try:
-        with open(CHAT_REGISTRY_PATH, "r", encoding="utf-8") as f:
+        with open(CHAT_REGISTRY_PATH, encoding="utf-8") as f:
             data = json.load(f)
         if isinstance(data, list):
             out = set()
@@ -71,7 +71,7 @@ def main():
     # Cache MemoryManager per telegram chat id
     memories = {}
 
-    def get_memory_manager(_chat_id: int) -> MemoryManager:
+    def get_memory_manager(_chat_id: int):
         _chat_id = int(_chat_id)
         if _chat_id not in memories:
             memories[_chat_id] = MemoryManager(
@@ -194,7 +194,9 @@ def main():
                         kind, sent_text = voice.send(telegram, chat_id, reply)
 
                         # 5) autopilot observes outbound
-                        autopilot.observe_outbound(chat_id, sent_text, cooldown_minutes=1, allow_addon=True)
+                        autopilot.observe_outbound(
+                            chat_id, sent_text, cooldown_minutes=1, allow_addon=True
+                        )
 
                         # 6) run one compaction after send
                         _memory_manager.after_assistant_sent()

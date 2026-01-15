@@ -1,0 +1,15 @@
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]  # errors, flakes, imports, bugbear, pyupgrade
+ignore = ["E501"]                   # let black handle line length
+
+[tool.black]
+line-length = 100
+target-version = ["py310"]
+
+[tool.vulture]
+exclude = [".venv", ".git", "__pycache__"]
+min_confidence = 80

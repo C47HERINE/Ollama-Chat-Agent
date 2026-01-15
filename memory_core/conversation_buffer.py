@@ -1,6 +1,6 @@
 import time
 
-from memory_core.helpers import read_json, write_json, append_json
+from memory_core.helpers import append_json, read_json, write_json
 
 
 class ConversationBuffer:
@@ -21,12 +21,14 @@ class ConversationBuffer:
 
     def append(self, role: str, content: str, kind: str = "") -> None:
         items = self._load()
-        items.append({
-            "role": str(role),
-            "ts_ms": int(time.time() * 1000),
-            "content": (content or "").strip(),
-            "kind": (kind or "").strip(),
-        })
+        items.append(
+            {
+                "role": str(role),
+                "ts_ms": int(time.time() * 1000),
+                "content": (content or "").strip(),
+                "kind": (kind or "").strip(),
+            }
+        )
         self._save(items)
 
     def count(self) -> int:
@@ -37,8 +39,8 @@ class ConversationBuffer:
 
     def pop_oldest(self, n: int) -> list:
         items = self._load()
-        chunk = items[:max(0, int(n))]
-        remaining = items[max(0, int(n)):]
+        chunk = items[: max(0, int(n))]
+        remaining = items[max(0, int(n)) :]
         self._save(remaining)
         return chunk
 

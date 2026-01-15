@@ -1,4 +1,5 @@
 import os
+
 import requests
 
 
@@ -23,7 +24,7 @@ class TelegramBot:
             "chat_id": chat_id,
             "text": text,
             "disable_web_page_preview": disable_web_page_preview,
-            }
+        }
         r = requests.post(self.base_url + method, params=parameters, timeout=60)
         r.raise_for_status()
         return r.json()
@@ -37,7 +38,9 @@ class TelegramBot:
             data = {"chat_id": chat_id}
             if caption:
                 data["caption"] = caption
-            request_post = requests.post(self.base_url + method, data=data, files=files, timeout=120)
+            request_post = requests.post(
+                self.base_url + method, data=data, files=files, timeout=120
+            )
         request_post.raise_for_status()
         return request_post.json()
 

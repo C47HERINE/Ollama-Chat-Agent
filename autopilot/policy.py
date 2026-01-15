@@ -10,7 +10,9 @@ def schedule_next_reengage(state, config):
     lt = t.time.localtime(target / 1000)
     hour = lt.tm_hour
     if t.is_quiet_hours(hour, config["quiet_start_hour"], config["quiet_end_hour"]):
-        day_start = int(t.time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)) * 1000)
+        day_start = int(
+            t.time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1)) * 1000
+        )
         target = day_start + config["quiet_end_hour"] * 60 * 60 * 1000
         if target <= now:
             target += 24 * 60 * 60 * 1000
@@ -20,7 +22,8 @@ def schedule_next_reengage(state, config):
 def roll_cap_on_inbound(state, config):
     state["since_user_autonomous_count"] = 0
     state["since_user_autonomous_cap"] = int(
-        t.pseudo_random_range(config["cap_min"], config["cap_max"] + 1))
+        t.pseudo_random_range(config["cap_min"], config["cap_max"] + 1)
+    )
 
 
 def can_send_autonomous(state, kind, config):
@@ -119,7 +122,11 @@ def apply_post_send_updates(st, kind, cfg):
     st["last_autonomous_ms"] = sent_ms
     if kind == "addon":
         st["since_user_autonomous_count"] = int(st.get("since_user_autonomous_count", 0)) + 1
-        st["next_eligible_send_ms"] = sent_ms + int(cfg["addon_post_send_cooldown_minutes"] * 60 * 1000)
+        st["next_eligible_send_ms"] = sent_ms + int(
+            cfg["addon_post_send_cooldown_minutes"] * 60 * 1000
+        )
     else:
-        st["next_eligible_send_ms"] = sent_ms + int(cfg["starter_post_send_cooldown_minutes"] * 60 * 1000)
+        st["next_eligible_send_ms"] = sent_ms + int(
+            cfg["starter_post_send_cooldown_minutes"] * 60 * 1000
+        )
         schedule_next_reengage(st, cfg)

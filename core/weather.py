@@ -1,7 +1,7 @@
 import json
 import os
-import requests
 
+import requests
 from dotenv import load_dotenv
 
 import core.timeutils as core_time
@@ -28,7 +28,7 @@ class WeatherInjector:
         if not os.path.exists(self.state_path):
             return default
         try:
-            with open(self.state_path, "r", encoding="utf-8") as f:
+            with open(self.state_path, encoding="utf-8") as f:
                 data = json.load(f)
             if not isinstance(data, dict):
                 return default
@@ -49,7 +49,7 @@ class WeatherInjector:
         except OSError:
             pass
 
-    def should_update_now(self) -> bool:
+    def should_update_now(self):
         if not self.lat or not self.lon:
             return False
         dt = core_time.local_dt()

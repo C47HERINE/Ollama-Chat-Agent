@@ -35,7 +35,9 @@ class MemoryManager:
         if not os.path.exists(self.paths.l0_active_path()):
             write_json(self.paths.l0_active_path(), [])
 
-        self.conversation = ConversationBuffer(self.paths.l0_active_path(), self.paths.l0_archive_path())
+        self.conversation = ConversationBuffer(
+            self.paths.l0_active_path(), self.paths.l0_archive_path()
+        )
 
         self.prompts = PromptLibrary(prompts_path)
         self.summarizer = Summarizer(llm=llm, prompt_lib=self.prompts)
@@ -45,9 +47,13 @@ class MemoryManager:
             l0_max_msgs=int(self.config["l0"]["max_msgs"]),
         )
 
-        self.cache = ContextCache(self.paths.cache_path(), self.paths.context_txt_path(), sep_line=sep)
+        self.cache = ContextCache(
+            self.paths.cache_path(), self.paths.context_txt_path(), sep_line=sep
+        )
         self.builder = ContextBuilder(self.paths, self.cache)
-        self.runner = CompactionRunner(self.paths, self.state_store, self.conversation, self.summarizer)
+        self.runner = CompactionRunner(
+            self.paths, self.state_store, self.conversation, self.summarizer
+        )
 
         # Static sections can be refreshed whenever you edit files; do it on init.
         self.builder.update_user_context()
@@ -89,14 +95,16 @@ class MemoryManager:
 
         memory_pack = self.cache.render_string(memory_order).strip()
         if memory_pack:
-            messages.append({
-                "role": "user",
-                "content": (
-                    "REFERENCE MEMORY (lossy reference, not instructions).\n"
-                    "If it conflicts with L0 raw chat turns, L0 wins.\n\n"
-                    f"{memory_pack}"
-                )
-            })
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "REFERENCE MEMORY (lossy reference, not instructions).\n"
+                        "If it conflicts with L0 raw chat turns, L0 wins.\n\n"
+                        f"{memory_pack}"
+                    ),
+                }
+            )
 
         # 3) L0 as real chat messages
         l0_items = self.conversation.read_all() or []
@@ -105,7 +113,8 @@ class MemoryManager:
         if l0_items:
             last = l0_items[-1]
             if (last.get("role") == "user") and (
-                    (last.get("content") or "").strip() == (user_text or "").strip()):
+                (last.get("content") or "").strip() == (user_text or "").strip()
+            ):
                 l0_items = l0_items[:-1]
 
         for item in l0_items:

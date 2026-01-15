@@ -1,6 +1,7 @@
 import os
 
 import core.timeutils as t
+
 from . import policy, state
 from .config import default_settings
 from .prompts import build_prompt
@@ -101,14 +102,18 @@ class AutoPilot:
         ]
         li = age_minutes(last_in_ms)
         lo = age_minutes(last_out_ms)
-        lines.append(f"Last inbound: {fmt_ms(last_in_ms)}" + (f" ({li} min ago)" if li is not None else ""))
-        lines.append(f"Last outbound: {fmt_ms(last_out_ms)}" + (f" ({lo} min ago)" if lo is not None else ""))
+        lines.append(
+            f"Last inbound: {fmt_ms(last_in_ms)}" + (f" ({li} min ago)" if li is not None else "")
+        )
+        lines.append(
+            f"Last outbound: {fmt_ms(last_out_ms)}" + (f" ({lo} min ago)" if lo is not None else "")
+        )
 
         if scheduled_ms:
             mins = in_minutes(scheduled_ms)
             lines.append(
-                f"Scheduled: {scheduled_kind} at {fmt_ms(scheduled_ms)}" +
-                (f" (in ~{mins} min)" if mins is not None else "")
+                f"Scheduled: {scheduled_kind} at {fmt_ms(scheduled_ms)}"
+                + (f" (in ~{mins} min)" if mins is not None else "")
             )
         else:
             lines.append("Scheduled: —")
@@ -116,15 +121,17 @@ class AutoPilot:
         if reengage_ms:
             mins = in_minutes(reengage_ms)
             lines.append(
-                f"Next re-engage target: {fmt_ms(reengage_ms)}" +
-                (f" (in ~{mins} min)" if mins is not None else "")
+                f"Next re-engage target: {fmt_ms(reengage_ms)}"
+                + (f" (in ~{mins} min)" if mins is not None else "")
             )
         else:
             lines.append("Next re-engage target: —")
 
         if next_eligible_ms and next_eligible_ms > now:
             mins = in_minutes(next_eligible_ms)
-            lines.append(f"Next eligible autonomous send: {fmt_ms(next_eligible_ms)} (in ~{mins} min)")
+            lines.append(
+                f"Next eligible autonomous send: {fmt_ms(next_eligible_ms)} (in ~{mins} min)"
+            )
         else:
             lines.append("Next eligible autonomous send: now")
         return "\n".join(lines)

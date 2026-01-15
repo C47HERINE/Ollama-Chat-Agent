@@ -28,9 +28,15 @@ class MemoryPaths:
 
     def ensure(self) -> None:
         for d in [
-            self.system_dir, self.user_context_dir,
-            self.l0_dir, self.l1_dir, self.l2_dir, self.l3_dir, self.l4_dir,
-            self.state_dir, self.temp_dir
+            self.system_dir,
+            self.user_context_dir,
+            self.l0_dir,
+            self.l1_dir,
+            self.l2_dir,
+            self.l3_dir,
+            self.l4_dir,
+            self.state_dir,
+            self.temp_dir,
         ]:
             ensure_dir(d)
 

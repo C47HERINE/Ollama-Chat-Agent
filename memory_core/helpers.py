@@ -9,7 +9,7 @@ def ensure_dir(path: str) -> None:
 
 def read_text(path: str) -> str:
     try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
+        with open(path, encoding="utf-8", errors="replace") as f:
             return f.read()
     except Exception as e:
         print(f"memory_core.helpers.read_text: {e}")
@@ -24,7 +24,7 @@ def write_text(path: str, text: str) -> None:
 
 def read_json(path: str):
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         print(f"memory_core.helpers.read_json: {e}")

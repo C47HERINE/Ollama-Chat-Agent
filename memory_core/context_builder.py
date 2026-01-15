@@ -35,6 +35,7 @@ class ContextBuilder:
 
     def update_low_priority(self, path) -> None:
         import core.weather as weather
+
         weather_injector = weather.WeatherInjector()
         weather_txt = weather_injector.weather_updater()
         if weather_txt and weather_txt.strip():

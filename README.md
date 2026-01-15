@@ -1,3 +1,5 @@
+[![CI](https://github.com/C47HERINE/Ollama-Chat-Agent/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/C47HERINE/Ollama-Chat-Agent/actions/workflows/ci.yml)
+
 # 🤖 Autonomous Chat Agent (Telegram + Ollama)
 
 An experimental systems-level autonomous chat agent written in Python, designed to behave like a real person texting over time.

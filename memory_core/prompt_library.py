@@ -11,6 +11,6 @@ class PromptLibrary:
         self.templates = (data.get("templates") or {}) if isinstance(data, dict) else {}
         self.limits = (data.get("limits") or {}) if isinstance(data, dict) else {}
 
-    def format(self, name: str, **kwargs) -> str:
+    def format(self, name: str, **kwargs):
         tpl = self.templates.get(name, "")
         return tpl.format(**kwargs)
