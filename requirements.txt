@@ -89,7 +89,6 @@ soxr==1.0.0
 spacy_pkuseg==1.0.1
 srsly==2.5.2
 starlette==0.50.0
-sympy==1.14.0
 threadpoolctl==3.6.0
 timeutils==0.3.2
 tokenizers==0.20.3
