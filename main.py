@@ -1,5 +1,7 @@
 import json
 import os
+import traceback
+
 from dotenv import load_dotenv
 from autopilot.autopilot import AutoPilot
 from core.ollama_chat import OllamaChatbot
@@ -24,7 +26,8 @@ autopilot = AutoPilot(tick_every_seconds=30)
 ollama = OllamaChatbot(ollama_model, ollama_host)
 ollama_host = os.getenv("OLLAMA_HOST")
 ollama_model = os.getenv("OLLAMA_MODEL")
-voice = VoiceRouter()
+voice_prompt = os.getenv("VOICE_PROMPT_WAV")
+voice = VoiceRouter(voice_prompt)
 
 if not ollama_host:
     raise RuntimeError("Missing required env: OLLAMA_HOST")
@@ -148,7 +151,7 @@ def main():
                 autopilot.observe_inbound(chat_id, text)
 
                 # 1) log inbound + build context (string returned)
-                memory_manager.on_message("user", text, kind="inbound")
+                memory_manager.on_message(f"{first_name}", text, kind="inbound")
 
                 # 2) ask model with injected context
                 messages = memory_manager.build_chat_messages(text)
@@ -169,7 +172,8 @@ def main():
                     # 6) run one compaction after send
                     memory_manager.after_assistant_sent()
         except Exception as e:
-            print(f"{e}: main.main")
+            print(f"main : {e}")
+            traceback.print_exc()
 
 if __name__ == "__main__":
     main()

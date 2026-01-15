@@ -1,21 +1,17 @@
-import os
-import re
-import wave
-
+import os, re, wave, torch
 import numpy as np
-import torch
 from chatterbox.tts import ChatterboxTTS
+from dotenv import load_dotenv
 
 class VoiceRouter:
     """Route assistant output to Telegram as text or a single voice memo."""
-
-    def __init__(self):
-        self.cfg_weight = os.getenv("VOICE_CFG_WEIGHT")
-        self.audio_prompt_path = os.getenv("VOICE_PROMPT_WAV")
-        self.exaggeration = os.getenv("VOICE_EXAGGERATION")
-        self.temperature = os.getenv("TEMPERATURE")
+    def __init__(self, audio_prompt_path):
+        self.audio_prompt_path = audio_prompt_path
         self.audio_out_path = "./user/voice/temp/voice_memo.wav"
         self.voice_command = "/voice"
+        self.cfg_weight = 0.5
+        self.exaggeration = 0.5
+        self.temperature = 0.9
         self.threshold_chars = 250
         self.batch_target_chars = 250
         self.batch_max_chars = 500
@@ -91,7 +87,6 @@ class VoiceRouter:
         return prefix, voice_part
 
     def split_into_sentence_chunks(self, text: str):
-
         def hard_split(s: str):
             s = s.strip()
             out = []
