@@ -17,24 +17,17 @@ load_dotenv()
 ollama_model = os.getenv("OLLAMA_MODEL")
 ollama_host = os.getenv("OLLAMA_HOST")
 telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-print("TELEGRAM_BOT_TOKEN =", repr(telegram_bot_token))
 print(f"[Ollama] Host: {ollama_host}")
 print(f"[Ollama] Model: {ollama_model}")
 
 telegram = TelegramBot(telegram_bot_token)
 autopilot = AutoPilot(tick_every_seconds=30)
-ollama = OllamaChatbot(ollama_model, ollama_host)
 ollama_host = os.getenv("OLLAMA_HOST")
 ollama_model = os.getenv("OLLAMA_MODEL")
 voice_prompt = os.getenv("VOICE_PROMPT_WAV")
 voice = VoiceRouter(voice_prompt)
-
-if not ollama_host:
-    raise RuntimeError("Missing required env: OLLAMA_HOST")
-if not ollama_model:
-    raise RuntimeError("Missing required env: OLLAMA_MODEL")
-
 ollama = OllamaChatbot(ollama_model, ollama_host)
+
 def load_known_chats():
     if not os.path.exists(CHAT_REGISTRY_PATH):
         return set()
