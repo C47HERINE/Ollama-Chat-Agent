@@ -73,3 +73,9 @@ class TelegramBot:
         request_post.raise_for_status()
         return request_post.json()
 
+    def send_chat_action(self, chat_id: int, action: str):
+        method = "sendChatAction"
+        parameters = {"chat_id": chat_id, "action": action}
+        r = requests.post(self.base_url + method, params=parameters, timeout=15)
+        r.raise_for_status()
+        return r.json()

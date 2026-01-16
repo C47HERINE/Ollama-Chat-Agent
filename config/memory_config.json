@@ -11,12 +11,12 @@
     "max_per_assistant_msg": 1
   },
   "injection_order": [
-    "low",
     "user_context",
     "l1",
     "l2",
     "l3",
-    "l4"
+    "l4",
+    "low"
   ],
   "separation_line": "========================================================================"
 }

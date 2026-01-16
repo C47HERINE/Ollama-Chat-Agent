@@ -1,4 +1,6 @@
 import os, re, wave, torch
+import threading
+
 import numpy as np
 from chatterbox.tts import ChatterboxTTS
 
@@ -241,25 +243,60 @@ class VoiceRouter:
     def send(self, tg, chat_id: int, assistant_text: str):
         raw_text = assistant_text or ""
 
-        # Split based on RAW text so /voice is detected reliably
         prefix, voice_part = self.find_voice_split(raw_text)
 
+        def action_loop(action: str, stop_event, interval_s: float = 4.5):
+            # local helper; NOT added to TelegramBot, no duplicates
+            while not stop_event.is_set():
+                try:
+                    tg.send_chat_action(chat_id, action)
+                except Exception:
+                    pass
+                stop_event.wait(interval_s)
+
+        def send_voice_with_indicators(tts_src_text: str):
+            tts_src_text = (tts_src_text or "").strip()
+            if not tts_src_text:
+                tts_src_text = "..."
+
+            # recording while generating
+            stop_record = threading.Event()
+            t1 = threading.Thread(target=action_loop, args=("record_voice", stop_record), daemon=True)
+            t1.start()
+            try:
+                audio_path = self.render_voice(tts_src_text)
+            finally:
+                stop_record.set()
+
+            # uploading while sending
+            stop_upload = threading.Event()
+            t2 = threading.Thread(target=action_loop, args=("upload_voice", stop_upload), daemon=True)
+            t2.start()
+            try:
+                tg.send_voice(chat_id, audio_path)
+            finally:
+                stop_upload.set()
+
+        # /voice path
         if voice_part:
             if prefix.strip():
+                try:
+                    tg.send_chat_action(chat_id, "typing")
+                except Exception as e:
+                    print(e)
+                    pass
                 tg.send_message(chat_id, prefix.strip())
 
             tts_text = self.clean_text_for_tts(self.remove_emojis(voice_part))
-            audio_path = self.render_voice(tts_text)
-            tg.send_voice(chat_id, audio_path)
+            send_voice_with_indicators(tts_text)
             return "voice", raw_text
 
-        # Otherwise: length threshold on cleaned TTS version
+        # Auto voice by length
         tts_text = self.clean_text_for_tts(self.remove_emojis(raw_text))
         if len(tts_text) >= self.threshold_chars:
-            audio_path = self.render_voice(tts_text)
-            tg.send_voice(chat_id, audio_path)
+            send_voice_with_indicators(tts_text)
             return "voice", raw_text
 
-        # Send RAW text (no cleaning)
+        # Text path (no generation here; typing during generation is handled in main)
         tg.send_message(chat_id, raw_text)
         return "text", raw_text

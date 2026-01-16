@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 import time
 import traceback
 from dotenv import load_dotenv
@@ -77,10 +78,28 @@ def main():
             )
         return memories[_chat_id]
 
+    def ask_with_typing(_chat_id: int, msgs):
+        stop = threading.Event()
+
+        def _loop():
+            while not stop.is_set():
+                try:
+                    telegram.send_chat_action(_chat_id, "typing")
+                except Exception:
+                    pass
+                stop.wait(4.5)
+
+        t = threading.Thread(target=_loop, daemon=True)
+        t.start()
+        try:
+            return (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
+        finally:
+            stop.set()
+
     def generate_fn(chat_id, prompt_text):
         mm = get_memory_manager(chat_id)
         msgs = mm.build_chat_messages(prompt_text)
-        return (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
+        return ask_with_typing(chat_id, msgs)
 
     def send_fn(chat_id, text_to_send):
         mm = get_memory_manager(chat_id)
@@ -140,9 +159,9 @@ def main():
 
                 # 2) ask model with injected context
                 messages = memory_manager.build_chat_messages(text)
-                reply = (ollama.ask_messages(messages, stream_to_console=False) or "").strip()
-
+                reply = ask_with_typing(chat_id, messages)
                 if reply:
+
                     # 3) log outbound assistant reply (sanitized)
                     memory_manager.on_message("assistant", reply, kind="reply")
 
