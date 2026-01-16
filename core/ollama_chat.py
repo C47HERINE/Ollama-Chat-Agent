@@ -1,27 +1,10 @@
-import json
-import os
-
-import requests
-
+import json, requests
 
 class OllamaChatbot:
     """Chat wrapper for Ollama."""
-
-    def __init__(self):
-        self._chat_id = None
-        self.model = os.getenv("OLLAMA_MODEL") or ""
-        self.host = (os.getenv("OLLAMA_HOST") or "").rstrip("/")
-
-        if not self.model:
-            raise RuntimeError("Missing required env: OLLAMA_MODEL")
-        if not self.host:
-            raise RuntimeError("Missing required env: OLLAMA_HOST")
-
-        print(f"[Ollama] Host: {self.host}")
-        print(f"[Ollama] Model: {self.model}")
-
-    def use_chat(self, chat_id: int):
-        self._chat_id = chat_id
+    def __init__(self, model, host):
+        self.model = model
+        self.host = host
 
     # -------------------------
     # Core call

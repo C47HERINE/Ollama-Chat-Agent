@@ -1,65 +1,23 @@
-import os
-import re
-import wave
+import os, re, wave, torch
+import threading
 
 import numpy as np
-import torch
 from chatterbox.tts import ChatterboxTTS
-
 
 class VoiceRouter:
     """Route assistant output to Telegram as text or a single voice memo."""
-
-    def __init__(
-        self,
-        audio_out_path="./user/voice/temp/voice_memo.wav",
-        threshold_chars=250,
-        voice_command="/voice",
-        device="cuda",
-        audio_prompt_path=None,
-        exaggeration=None,
-        cfg_weight=None,
-        temperature=None,
-        batch_target_chars=250,
-        batch_max_chars=500,
-    ):
-
-        env_prompt = os.getenv("VOICE_PROMPT_WAV")
-        env_exaggeration = os.getenv("VOICE_EXAGGERATION")
-        env_cfg = os.getenv("VOICE_CFG_WEIGHT")
-        env_temperature = os.getenv("TEMPERATURE")
-
-        self.audio_out_path = audio_out_path
-        self.threshold_chars = int(threshold_chars)
-        self.voice_command = voice_command
-        self.batch_target_chars = int(batch_target_chars)
-        self.batch_max_chars = int(batch_max_chars)
-        self.model = None
-
-        self.audio_prompt_path = (
-            audio_prompt_path if audio_prompt_path is not None else (env_prompt or None)
-        )
-        self.exaggeration = (
-            float(exaggeration)
-            if exaggeration is not None
-            else (float(env_exaggeration) if env_exaggeration else 0.5)
-        )
-        self.cfg_weight = (
-            float(cfg_weight) if cfg_weight is not None else (float(env_cfg) if env_cfg else 0.5)
-        )
-        self.temperature = (
-            float(temperature)
-            if temperature is not None
-            else (float(env_temperature) if temperature else 0.8)
-        )
-        if device:
-            self.device = device
-        else:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    def ensure_model(self):
-        if self.model is None:
-            self.model = ChatterboxTTS.from_pretrained(device=self.device)
+    def __init__(self, audio_prompt_path):
+        self.audio_prompt_path = audio_prompt_path
+        self.audio_out_path = "./user/voice/temp/voice_memo.wav"
+        self.voice_command = "/voice"
+        self.cfg_weight = 0.5
+        self.exaggeration = 0.5
+        self.temperature = 0.9
+        self.threshold_chars = 250
+        self.batch_target_chars = 250
+        self.batch_max_chars = 500
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.model = ChatterboxTTS.from_pretrained(device=self.device)
 
     def remove_emojis(self, text: str) -> str:
         if not text:
@@ -91,7 +49,7 @@ class VoiceRouter:
         t = t.replace("\\n", " ")
         t = t.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
 
-        # --- Remove markdown emphasis that causes repetition ---
+        # --- Remove Markdown emphasis that causes repetition ---
         # *word* / **word** / _word_
         t = re.sub(r"[*_]{1,2}([^*_]+)[*_]{1,2}", r"\1", t)
 
@@ -130,7 +88,6 @@ class VoiceRouter:
         return prefix, voice_part
 
     def split_into_sentence_chunks(self, text: str):
-
         def hard_split(s: str):
             s = s.strip()
             out = []
@@ -248,16 +205,12 @@ class VoiceRouter:
             wf.writeframes(pcm.tobytes())
 
     def render_voice(self, text: str):
-        self.ensure_model()
-
         base = self.clean_text_for_tts(text)
         if not base:
             base = "..."
-
         chunks = self.split_into_sentence_chunks(base)
         if not chunks:
             chunks = ["..."]
-
         wavs = []
         for c in chunks:
             c = c.strip()
@@ -290,25 +243,60 @@ class VoiceRouter:
     def send(self, tg, chat_id: int, assistant_text: str):
         raw_text = assistant_text or ""
 
-        # Split based on RAW text so /voice is detected reliably
         prefix, voice_part = self.find_voice_split(raw_text)
 
+        def action_loop(action: str, stop_event, interval_s: float = 4.5):
+            # local helper; NOT added to TelegramBot, no duplicates
+            while not stop_event.is_set():
+                try:
+                    tg.send_chat_action(chat_id, action)
+                except Exception:
+                    pass
+                stop_event.wait(interval_s)
+
+        def send_voice_with_indicators(tts_src_text: str):
+            tts_src_text = (tts_src_text or "").strip()
+            if not tts_src_text:
+                tts_src_text = "..."
+
+            # recording while generating
+            stop_record = threading.Event()
+            t1 = threading.Thread(target=action_loop, args=("record_voice", stop_record), daemon=True)
+            t1.start()
+            try:
+                audio_path = self.render_voice(tts_src_text)
+            finally:
+                stop_record.set()
+
+            # uploading while sending
+            stop_upload = threading.Event()
+            t2 = threading.Thread(target=action_loop, args=("upload_voice", stop_upload), daemon=True)
+            t2.start()
+            try:
+                tg.send_voice(chat_id, audio_path)
+            finally:
+                stop_upload.set()
+
+        # /voice path
         if voice_part:
             if prefix.strip():
+                try:
+                    tg.send_chat_action(chat_id, "typing")
+                except Exception as e:
+                    print(e)
+                    pass
                 tg.send_message(chat_id, prefix.strip())
 
             tts_text = self.clean_text_for_tts(self.remove_emojis(voice_part))
-            audio_path = self.render_voice(tts_text)
-            tg.send_voice(chat_id, audio_path)
+            send_voice_with_indicators(tts_text)
             return "voice", raw_text
 
-        # Otherwise: length threshold on cleaned TTS version
+        # Auto voice by length
         tts_text = self.clean_text_for_tts(self.remove_emojis(raw_text))
         if len(tts_text) >= self.threshold_chars:
-            audio_path = self.render_voice(tts_text)
-            tg.send_voice(chat_id, audio_path)
+            send_voice_with_indicators(tts_text)
             return "voice", raw_text
 
-        # Send RAW text (no cleaning)
+        # Text path (no generation here; typing during generation is handled in main)
         tg.send_message(chat_id, raw_text)
         return "text", raw_text

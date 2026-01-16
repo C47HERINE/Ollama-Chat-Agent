@@ -19,7 +19,7 @@ class MemoryManager:
     - after_assistant_sent(): run one compaction job and refresh cache.
     """
 
-    def __init__(self, root: str, chat_id: int, llm, config_path: str, prompts_path: str):
+    def __init__(self, root: str, chat_id: int, config_path: str, prompts_path: str, llm):
         self.paths = MemoryPaths(root=root, chat_id=chat_id)
         self.paths.ensure()
         self.config = read_json(config_path)
@@ -40,7 +40,7 @@ class MemoryManager:
         )
 
         self.prompts = PromptLibrary(prompts_path)
-        self.summarizer = Summarizer(llm=llm, prompt_lib=self.prompts)
+        self.summarizer = Summarizer(prompt_lib=self.prompts, llm=llm)
 
         self.planner = CompactionPlanner(
             max_level_files=int(self.config["levels"]["max_files"]),
