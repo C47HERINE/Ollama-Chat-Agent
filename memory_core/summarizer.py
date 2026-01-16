@@ -1,15 +1,7 @@
-from core.ollama_chat import OllamaChatbot
-import os, dotenv
-
-dotenv.load_dotenv()
-ollama_model = os.getenv("OLLAMA_MODEL")
-ollama_host = os.getenv("OLLAMA_HOST")
-
 class Summarizer:
     """Run summary/merge tasks through the LLM using prompt templates."""
-    def __init__(self, prompt_lib):
-        ollama = OllamaChatbot(ollama_model, ollama_host)
-        self.ollama= ollama
+    def __init__(self, prompt_lib, llm):
+        self.ollama= llm
         self.prompts = prompt_lib
 
     def l0_to_l1(self, chunk_text: str) -> str:

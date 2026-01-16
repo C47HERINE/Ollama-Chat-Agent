@@ -1,5 +1,4 @@
 import os
-
 import core.timeutils as t
 
 from . import policy, state
@@ -142,32 +141,32 @@ class AutoPilot:
         self.next_tick_s = t.now_s() + self.tick_every_seconds
 
         for chat_id in list(self.known_chats):
-            st = self.load_state(chat_id)
-            if st.get("scheduled_send_ms", 0) and t.now_ms() >= st["scheduled_send_ms"]:
-                kind = st.get("scheduled_kind") or "starter"
+            _state = self.load_state(chat_id)
+            if _state.get("scheduled_send_ms", 0) and t.now_ms() >= _state["scheduled_send_ms"]:
+                kind = _state.get("scheduled_kind") or "starter"
                 prompt = build_prompt(kind)
 
-                st["scheduled_send_ms"] = 0
-                st["scheduled_kind"] = ""
-                text = (generate_fn(prompt) or "").strip()
+                _state["scheduled_send_ms"] = 0
+                _state["scheduled_kind"] = ""
+                text = (generate_fn(chat_id, prompt) or "").strip()
                 if text:
                     send_fn(chat_id, text)
-                    st["last_outbound_text"] = text
-                    policy.apply_post_send_updates(st, kind, self.config)
-                self.save_state(chat_id, st)
+                    _state["last_outbound_text"] = text
+                    policy.apply_post_send_updates(_state, kind, self.config)
+                self.save_state(chat_id, _state)
                 continue
-            if st.get("scheduled_send_ms", 0):
-                self.save_state(chat_id, st)
+            if _state.get("scheduled_send_ms", 0):
+                self.save_state(chat_id, _state)
                 continue
-            if policy.should_schedule_addon(st, self.config):
-                policy.schedule_addon(st, self.config)
-                self.save_state(chat_id, st)
+            if policy.should_schedule_addon(_state, self.config):
+                policy.schedule_addon(_state, self.config)
+                self.save_state(chat_id, _state)
                 continue
-            if policy.should_schedule_starter(st, self.config):
-                policy.schedule_starter(st, self.config)
-                self.save_state(chat_id, st)
+            if policy.should_schedule_starter(_state, self.config):
+                policy.schedule_starter(_state, self.config)
+                self.save_state(chat_id, _state)
                 continue
 
-            self.save_state(chat_id, st)
+            self.save_state(chat_id, _state)
 
         return True

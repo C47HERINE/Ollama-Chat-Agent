@@ -1,7 +1,7 @@
 import json
 import os
+import time
 import traceback
-
 from dotenv import load_dotenv
 from autopilot.autopilot import AutoPilot
 from core.ollama_chat import OllamaChatbot
@@ -17,16 +17,17 @@ load_dotenv()
 ollama_model = os.getenv("OLLAMA_MODEL")
 ollama_host = os.getenv("OLLAMA_HOST")
 telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+print("TELEGRAM_BOT_TOKEN =", repr(telegram_bot_token))
 print(f"[Ollama] Host: {ollama_host}")
 print(f"[Ollama] Model: {ollama_model}")
 
 telegram = TelegramBot(telegram_bot_token)
 autopilot = AutoPilot(tick_every_seconds=30)
+ollama = OllamaChatbot(ollama_model, ollama_host)
 ollama_host = os.getenv("OLLAMA_HOST")
 ollama_model = os.getenv("OLLAMA_MODEL")
 voice_prompt = os.getenv("VOICE_PROMPT_WAV")
-voice = VoiceRouter(voice_prompt)
-ollama = OllamaChatbot(ollama_model, ollama_host)
+voice = VoiceRouter(audio_prompt_path=voice_prompt)
 
 def load_known_chats():
     if not os.path.exists(CHAT_REGISTRY_PATH):
@@ -76,28 +77,20 @@ def main():
             )
         return memories[_chat_id]
 
-    def generate_fn(prompt_text):
-        """
-        AutoPilot uses this to generate messages.
-        We inject current context, but DO NOT log the generation prompt into L0.
-        """
-        auto_reply = memory_manager.build_chat_messages(prompt_text)
-        text_out = (ollama.ask_messages(auto_reply, stream_to_console=False) or "").strip()
-        return text_out or ""
+    def generate_fn(chat_id, prompt_text):
+        mm = get_memory_manager(chat_id)
+        msgs = mm.build_chat_messages(prompt_text)
+        return (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
 
-    def send_fn(telegram_chat_id, text_to_send):
-        """
-        AutoPilot uses this to send autonomous messages.
-        We DO log the outbound assistant message into L0, then compact once after send.
-        """
-        text_to_send = (text_to_send or "").strip()
-        if not text_to_send:
-            return
-        memory_manager.on_message("assistant", text_to_send, kind="autopilot")
-        _kind, _sent_text = voice.send(telegram, telegram_chat_id, text_to_send)
-        autopilot.observe_outbound(telegram_chat_id,
-            _sent_text, cooldown_minutes=180, allow_addon=False)
-        memory_manager.after_assistant_sent()
+    def send_fn(chat_id, text_to_send):
+        mm = get_memory_manager(chat_id)
+        mm.on_message("assistant", text_to_send, kind="autopilot")
+        kind, sent_text = voice.send(telegram, chat_id, text_to_send)
+        autopilot.observe_outbound(chat_id, sent_text, cooldown_minutes=180, allow_addon=False)
+        mm.after_assistant_sent()
+
+    # pass function objects (NO parentheses)
+
 
     while True:
         try:
@@ -105,7 +98,6 @@ def main():
                 remember_chat(chat_id, known_chats)
                 autopilot.register_chat(chat_id)
                 memory_manager = get_memory_manager(chat_id)
-                autopilot.tick(send_fn=send_fn, generate_fn=generate_fn)
                 # ---- Commands (minimal) ----
                 if text == "/start":
                     reply = f"Hi! I'm online."
@@ -144,7 +136,7 @@ def main():
                 autopilot.observe_inbound(chat_id, text)
 
                 # 1) log inbound + build context (string returned)
-                memory_manager.on_message(f"{first_name}", text, kind="inbound")
+                memory_manager.on_message(f"user", text, kind="inbound")
 
                 # 2) ask model with injected context
                 messages = memory_manager.build_chat_messages(text)
@@ -159,11 +151,14 @@ def main():
 
                     # 5) autopilot observes outbound
                     autopilot.observe_outbound(
-                        chat_id, sent_text, cooldown_minutes=1, allow_addon=True
-                    )
+                        chat_id, sent_text, cooldown_minutes=1, allow_addon=True)
 
                     # 6) run one compaction after send
                     memory_manager.after_assistant_sent()
+
+            autopilot.tick(send_fn=send_fn, generate_fn=generate_fn)
+            time.sleep(0.3)
+
         except Exception as e:
             print(f"main : {e}")
             traceback.print_exc()

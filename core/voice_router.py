@@ -1,7 +1,6 @@
 import os, re, wave, torch
 import numpy as np
 from chatterbox.tts import ChatterboxTTS
-from dotenv import load_dotenv
 
 class VoiceRouter:
     """Route assistant output to Telegram as text or a single voice memo."""

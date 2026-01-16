@@ -11,7 +11,7 @@ class TelegramBot:
         self.offset = None
         self.timeout = 30
 
-    def get_updates(self):
+    def  get_updates(self):
         try:
             method = "getUpdates"
             parameters = {"timeout": self.timeout}
