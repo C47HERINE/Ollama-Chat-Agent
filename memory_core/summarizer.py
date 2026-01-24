@@ -6,12 +6,12 @@ class Summarizer:
 
     def l0_to_l1(self, chunk_text: str) -> str:
         prompt = self.prompts.format("l0_to_l1", chunk=chunk_text)
-        return (self.ollama.summarize_ask(prompt, stream_to_console=False) or "").strip()
+        return (self.ollama.summarize_ask(prompt, stream_to_console=False) or "")
 
     def merge_two(self, a_text: str, b_text: str) -> str:
         prompt = self.prompts.format("merge_two", a=a_text, b=b_text)
-        return (self.ollama.summarize_ask(prompt, stream_to_console=False) or "").strip()
+        return (self.ollama.summarize_ask(prompt, stream_to_console=False) or "")
 
     def l3_to_l4_master(self, master_text: str, a_text: str, b_text: str) -> str:
         prompt = self.prompts.format("l3_to_l4_master", master=master_text, a=a_text, b=b_text)
-        return (self.ollama.summarize_ask(prompt, stream_to_console=False) or "").strip()
+        return (self.ollama.summarize_ask(prompt, stream_to_console=False) or "")

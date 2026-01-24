@@ -29,7 +29,7 @@ class TelegramBot:
                 chat_id = chat.get("id")
                 if chat_id is None:
                     continue
-                text = (msg.get("text") or "").strip()
+                text = (msg.get("text") or "")
                 if not text:
                     continue
                 user = msg.get("from") or {}

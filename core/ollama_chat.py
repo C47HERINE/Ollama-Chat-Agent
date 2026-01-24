@@ -43,12 +43,12 @@ class OllamaChatbot:
             print()
         else:
             assistant_text = self.stream_chat(messages)
-        return (assistant_text or "").strip()
+        return (assistant_text or "")
 
     def summarize_ask(self, user_text: str, stream_to_console: bool = True) -> str:
         """Custom message builder"""
         with open("./user/system/system_prompt.txt") as f:
-            system_prompt = f.read().strip()
+            system_prompt = f.read()
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": (user_text or "")},

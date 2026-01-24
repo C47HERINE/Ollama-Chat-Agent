@@ -73,7 +73,7 @@ class VoiceRouter:
         t = "".join(ch for ch in t if ch.isprintable())
 
         # --- Collapse whitespace ---
-        t = re.sub(r"\s+", " ", t).strip()
+        t = re.sub(r"\s+", " ", t)
 
         return t
 
@@ -83,13 +83,13 @@ class VoiceRouter:
         idx = text.find(self.voice_command)
         if idx == -1:
             return text, ""
-        prefix = text[:idx].strip()
-        voice_part = text[idx + len(self.voice_command) :].strip()
+        prefix = text[:idx]
+        voice_part = text[idx + len(self.voice_command) :]
         return prefix, voice_part
 
     def split_into_sentence_chunks(self, text: str):
         def hard_split(s: str):
-            s = s.strip()
+            s = s
             out = []
             while s:
                 if len(s) <= max_len:
@@ -98,8 +98,8 @@ class VoiceRouter:
                 cut = s.rfind(" ", 0, max_len)
                 if cut == -1:
                     cut = max_len
-                out.append(s[:cut].strip())
-                s = s[cut:].strip()
+                out.append(s[:cut])
+                s = s[cut:]
             return out
 
         tts_text = self.clean_text_for_tts(text)
@@ -113,9 +113,9 @@ class VoiceRouter:
         sentences = []
         i = 0
         while i < len(parts):
-            split_sentence = (parts[i] or "").strip()
+            split_sentence = (parts[i] or "")
             if i + 1 < len(parts) and parts[i + 1] in ".!?":
-                split_sentence = (split_sentence + parts[i + 1]).strip()
+                split_sentence = (split_sentence + parts[i + 1])
                 i += 2
             else:
                 i += 1
@@ -130,25 +130,25 @@ class VoiceRouter:
             # If one sentence is too long, flush and split it
             if len(split_sentence) > max_len:
                 if buf:
-                    chunks.append(buf.strip())
+                    chunks.append(buf)
                     buf = ""
                 chunks.extend(hard_split(split_sentence))
                 continue
             if not buf:
                 buf = split_sentence
                 continue
-            candidate = (buf + " " + split_sentence).strip()
+            candidate = (buf + " " + split_sentence)
 
             # If we can still fit under max, and we're under target, keep accumulating
             if len(candidate) <= max_len and len(buf) < target:
                 buf = candidate
             else:
-                chunks.append(buf.strip())
+                chunks.append(buf)
                 buf = split_sentence
 
-        if buf.strip():
-            chunks.append(buf.strip())
-        return [c for c in chunks if c.strip()]
+        if buf:
+            chunks.append(buf)
+        return [c for c in chunks if c]
 
     def concat_wavs(self, wav_list):
         """Concatenate a list of torch tensors (audio)."""
@@ -213,7 +213,7 @@ class VoiceRouter:
             chunks = ["..."]
         wavs = []
         for c in chunks:
-            c = c.strip()
+            c = c
             if not c:
                 continue
             if len(c) > self.batch_max_chars:
@@ -255,7 +255,7 @@ class VoiceRouter:
                 stop_event.wait(interval_s)
 
         def send_voice_with_indicators(tts_src_text: str):
-            tts_src_text = (tts_src_text or "").strip()
+            tts_src_text = (tts_src_text or "")
             if not tts_src_text:
                 tts_src_text = "..."
 
@@ -279,13 +279,13 @@ class VoiceRouter:
 
         # /voice path
         if voice_part:
-            if prefix.strip():
+            if prefix:
                 try:
                     tg.send_chat_action(chat_id, "typing")
                 except Exception as e:
                     print(e)
                     pass
-                tg.send_message(chat_id, prefix.strip())
+                tg.send_message(chat_id, prefix)
 
             tts_text = self.clean_text_for_tts(self.remove_emojis(voice_part))
             send_voice_with_indicators(tts_text)
