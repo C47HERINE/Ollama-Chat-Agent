@@ -20,10 +20,11 @@ class CompactionRunner:
     def _load_master(self) -> str:
         if not os.path.exists(self.paths.master_path()):
             return ""
-        return read_text(self.paths.master_path()).strip()
+        else:
+            return read_text(self.paths.master_path())
 
     def _save_master(self, text: str) -> None:
-        write_text(self.paths.master_path(), (text or "").strip())
+        write_text(self.paths.master_path(), (text or ""))
 
     def _level_store(self, level: int) -> RecapStore:
         if level == 1:

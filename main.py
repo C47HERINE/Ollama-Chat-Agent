@@ -42,7 +42,7 @@ def load_known_chats():
         if isinstance(data, list):
             out = set()
             for x in data:
-                s = str(x).strip()
+                s = str(x)
                 if s.lstrip("-").isdigit():
                     out.add(int(s))
             return out
@@ -95,7 +95,7 @@ def main():
         t = threading.Thread(target=_loop, daemon=True)
         t.start()
         try:
-            return (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
+            return (ollama.ask_messages(msgs, stream_to_console=False) or "")
         finally:
             stop.set()
 
