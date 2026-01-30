@@ -2,7 +2,7 @@ import os, re, wave, torch
 import threading
 
 import numpy as np
-from chatterbox.tts import ChatterboxTTS
+# from chatterbox.tts import ChatterboxTTS
 
 class VoiceRouter:
     """Route assistant output to Telegram as text or a single voice memo."""
@@ -17,7 +17,8 @@ class VoiceRouter:
         self.batch_target_chars = 250
         self.batch_max_chars = 500
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = ChatterboxTTS.from_pretrained(device=self.device)
+        # self.model = ChatterboxTTS.from_pretrained(device=self.device)
+        self.model = None
 
     def remove_emojis(self, text: str) -> str:
         if not text:
@@ -205,6 +206,10 @@ class VoiceRouter:
             wf.writeframes(pcm.tobytes())
 
     def render_voice(self, text: str):
+        if self.model is None:
+            from chatterbox.tts import ChatterboxTTS
+            self.model = ChatterboxTTS.from_pretrained(device=self.device)
+
         base = self.clean_text_for_tts(text)
         if not base:
             base = "..."

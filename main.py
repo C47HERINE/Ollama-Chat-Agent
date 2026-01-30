@@ -8,7 +8,9 @@ from autopilot.autopilot import AutoPilot
 from core.ollama_chat import OllamaChatbot
 from core.telegram_bot import TelegramBot
 from core.voice_router import VoiceRouter
+import core.timeutils as t
 from memory_core.memory_manager import MemoryManager
+from memory_core.introspection import IntrospectionEngine
 
 CHAT_REGISTRY_PATH = os.path.join("agent_state", "known_chats.json")
 MEM_CONFIG_PATH = os.path.join("config", "memory_config.json")
@@ -29,6 +31,7 @@ ollama_host = os.getenv("OLLAMA_HOST")
 ollama_model = os.getenv("OLLAMA_MODEL")
 voice_prompt = os.getenv("VOICE_PROMPT_WAV")
 voice = VoiceRouter(audio_prompt_path=voice_prompt)
+introspection = IntrospectionEngine(t)
 
 def load_known_chats():
     if not os.path.exists(CHAT_REGISTRY_PATH):
@@ -108,6 +111,28 @@ def main():
         autopilot.observe_outbound(chat_id, sent_text, cooldown_minutes=180, allow_addon=False)
         mm.after_assistant_sent()
 
+    def introspection_fn(chat_id, state):
+        # Check if introspection is needed
+        if introspection.should_introspect(state, silence_ms=3600_000):
+            mm = get_memory_manager(chat_id)
+            prompt = introspection.build_block()
+            
+            # Use memory manager to build context for introspection
+            # We treat this as a system/internal prompt, but we need context
+            msgs = mm.build_chat_messages(prompt)
+            
+            # Ask LLM directly (no typing indicator for internal thought)
+            out = (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
+            
+            if out:
+                # Log to active raw conversation file
+                mm.on_message("system", out, kind="introspection")
+                
+                # Update state to mark introspection done
+                state["last_introspection_ms"] = t.now_ms()
+                # Note: state is a dict reference, so modification here affects the caller's state object
+                # which will be saved by autopilot.tick
+
     # pass function objects (NO parentheses)
 
 
@@ -175,7 +200,7 @@ def main():
                     # 6) run one compaction after send
                     memory_manager.after_assistant_sent()
 
-            autopilot.tick(send_fn=send_fn, generate_fn=generate_fn)
+            autopilot.tick(send_fn=send_fn, generate_fn=generate_fn, introspection_fn=introspection_fn)
             time.sleep(0.3)
 
         except Exception as e:

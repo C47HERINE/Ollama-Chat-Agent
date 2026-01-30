@@ -135,13 +135,27 @@ class AutoPilot:
             lines.append("Next eligible autonomous send: now")
         return "\n".join(lines)
 
-    def tick(self, send_fn, generate_fn):
+    def tick(self, send_fn, generate_fn, introspection_fn=None):
         if t.now_s() < self.next_tick_s:
             return False
         self.next_tick_s = t.now_s() + self.tick_every_seconds
 
         for chat_id in list(self.known_chats):
             _state = self.load_state(chat_id)
+            
+            # Introspection check
+            if introspection_fn:
+                introspection_fn(chat_id, _state)
+                # Reload state in case introspection modified it
+                # But since we passed the dict, if it was modified in place, we have it.
+                # However, introspection_fn might not save it.
+                # Let's assume introspection_fn handles saving if it modifies something critical,
+                # or we can save it here if we trust it modified _state in place.
+                # The requirement says "The introspection from the ai must be logged in the active raw conversation file."
+                # It also says "it must run using the autopilot and use the auto pilot state file."
+                # So we should save the state after introspection check.
+                self.save_state(chat_id, _state)
+
             if _state.get("scheduled_send_ms", 0) and t.now_ms() >= _state["scheduled_send_ms"]:
                 kind = _state.get("scheduled_kind") or "starter"
                 prompt = build_prompt(kind)

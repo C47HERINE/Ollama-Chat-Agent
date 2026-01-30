@@ -100,6 +100,13 @@ def should_schedule_starter(st, cfg):
     if target == 0:
         schedule_next_reengage(st, cfg)
         target = int(st.get("next_reengage_ms", 0))
+    
+    # If introspection happened recently, we might want to trigger a starter sooner
+    # But the requirement says "the goal is after an hour without messages sent by the user, the autopilot makes the ai do an autopilot run to drive future conversation"
+    # This is handled by introspection logic which runs separately.
+    # However, if introspection runs, it might be good to ensure next_reengage_ms is updated or checked.
+    # For now, we stick to the existing logic unless specified otherwise.
+
     return t.now_ms() >= target
 
 

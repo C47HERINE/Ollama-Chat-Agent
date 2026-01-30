@@ -19,6 +19,7 @@ def default_state():
         "last_autonomous_ms": 0,
         "since_user_autonomous_count": 0,
         "since_user_autonomous_cap": 0,
+        "last_introspection_ms": 0,
     }
 
 
