@@ -1,5 +1,4 @@
 import os
-
 from memory_core.compaction_planner import CompactionPlanner
 from memory_core.compaction_runner import CompactionRunner
 from memory_core.context_builder import ContextBuilder
@@ -31,7 +30,6 @@ class MemoryManager:
         self.state_store = StateStore(self.paths.state_path())
         self.state_store.ensure_exists()
 
-        # Ensure L0 active exists as []
         if not os.path.exists(self.paths.l0_active_path()):
             write_json(self.paths.l0_active_path(), [])
 
@@ -52,13 +50,12 @@ class MemoryManager:
         )
         self.builder = ContextBuilder(self.paths, self.cache)
         self.runner = CompactionRunner(
-            self.paths, self.state_store, self.conversation, self.summarizer
+            self.paths, self.state_store, self.conversation, self.summarizer,
+            l0_summary_msgs=int(self.config["l0"]["summary_msgs"])
         )
 
-        # Static sections can be refreshed whenever you edit files; do it on init.
         self.builder.update_user_context()
 
-        # Initialize cache with current state (empty on first run)
         state = self.state_store.load()
         self.builder.update_levels(state)
         self.builder.update_l0(self.conversation.read_all())
@@ -83,7 +80,6 @@ class MemoryManager:
             print("System Prompt: missing")
 
         # 4) REFERENCE MEMORY (everything except system + l0)
-        # We inject this BEFORE the conversation history so it acts as background knowledge.
         order = list(self.config.get("injection_order") or [])
         memory_order = [section_id for section_id in order if section_id not in "l0"]
 

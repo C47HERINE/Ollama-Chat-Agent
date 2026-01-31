@@ -18,13 +18,11 @@ def schedule_next_reengage(state, config):
             target += 24 * 60 * 60 * 1000
     state["next_reengage_ms"] = target
 
-
 def roll_cap_on_inbound(state, config):
     state["since_user_autonomous_count"] = 0
     state["since_user_autonomous_cap"] = int(
         t.pseudo_random_range(config["cap_min"], config["cap_max"] + 1)
     )
-
 
 def can_send_autonomous(state, kind, config):
     if state.get("paused"):
@@ -40,7 +38,6 @@ def can_send_autonomous(state, kind, config):
             return False
     return True
 
-
 def maybe_schedule_addon_immediately(state, cfg, base_ms):
     if state.get("paused"):
         return
@@ -55,7 +52,6 @@ def maybe_schedule_addon_immediately(state, cfg, base_ms):
     base = base_ms + int(cfg["addon_min_seconds"] * 1000)
     state["scheduled_send_ms"] = base + t.jitter_ms(cfg["jitter_min_ms"], cfg["jitter_max_ms"])
     state["scheduled_kind"] = "addon"
-
 
 def should_schedule_addon(st, cfg):
     if not can_send_autonomous(st, "addon", cfg):
@@ -88,7 +84,6 @@ def should_schedule_addon(st, cfg):
         return False
     return True
 
-
 def should_schedule_starter(st, cfg):
     if not can_send_autonomous(st, "starter", cfg):
         return False
@@ -100,26 +95,16 @@ def should_schedule_starter(st, cfg):
     if target == 0:
         schedule_next_reengage(st, cfg)
         target = int(st.get("next_reengage_ms", 0))
-    
-    # If introspection happened recently, we might want to trigger a starter sooner
-    # But the requirement says "the goal is after an hour without messages sent by the user, the autopilot makes the ai do an autopilot run to drive future conversation"
-    # This is handled by introspection logic which runs separately.
-    # However, if introspection runs, it might be good to ensure next_reengage_ms is updated or checked.
-    # For now, we stick to the existing logic unless specified otherwise.
-
     return t.now_ms() >= target
-
 
 def schedule_addon(st, cfg):
     base = t.now_ms() + int(cfg["addon_min_seconds"] * 1000)
     st["scheduled_send_ms"] = base + t.jitter_ms(cfg["jitter_min_ms"], cfg["jitter_max_ms"])
     st["scheduled_kind"] = "addon"
 
-
 def schedule_starter(st, cfg):
     st["scheduled_send_ms"] = t.now_ms() + t.jitter_ms(cfg["jitter_min_ms"], cfg["jitter_max_ms"])
     st["scheduled_kind"] = "starter"
-
 
 def apply_post_send_updates(st, kind, cfg):
     sent_ms = t.now_ms()

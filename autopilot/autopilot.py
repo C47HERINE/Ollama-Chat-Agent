@@ -143,23 +143,13 @@ class AutoPilot:
         for chat_id in list(self.known_chats):
             _state = self.load_state(chat_id)
             
-            # Introspection check
             if introspection_fn:
                 introspection_fn(chat_id, _state)
-                # Reload state in case introspection modified it
-                # But since we passed the dict, if it was modified in place, we have it.
-                # However, introspection_fn might not save it.
-                # Let's assume introspection_fn handles saving if it modifies something critical,
-                # or we can save it here if we trust it modified _state in place.
-                # The requirement says "The introspection from the ai must be logged in the active raw conversation file."
-                # It also says "it must run using the autopilot and use the auto pilot state file."
-                # So we should save the state after introspection check.
                 self.save_state(chat_id, _state)
 
             if _state.get("scheduled_send_ms", 0) and t.now_ms() >= _state["scheduled_send_ms"]:
                 kind = _state.get("scheduled_kind") or "starter"
                 prompt = build_prompt(kind)
-
                 _state["scheduled_send_ms"] = 0
                 _state["scheduled_kind"] = ""
                 text = (generate_fn(chat_id, prompt) or "")
@@ -169,13 +159,16 @@ class AutoPilot:
                     policy.apply_post_send_updates(_state, kind, self.config)
                 self.save_state(chat_id, _state)
                 continue
+
             if _state.get("scheduled_send_ms", 0):
                 self.save_state(chat_id, _state)
                 continue
+
             if policy.should_schedule_addon(_state, self.config):
                 policy.schedule_addon(_state, self.config)
                 self.save_state(chat_id, _state)
                 continue
+
             if policy.should_schedule_starter(_state, self.config):
                 policy.schedule_starter(_state, self.config)
                 self.save_state(chat_id, _state)

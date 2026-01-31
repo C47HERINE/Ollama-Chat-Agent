@@ -11,11 +11,12 @@ class CompactionRunner:
     Designed to be called AFTER assistant sends.
     """
 
-    def __init__(self, paths, state_store, conversation_buffer, summarizer):
+    def __init__(self, paths, state_store, conversation_buffer, summarizer, l0_summary_msgs: int):
         self.paths = paths
         self.state_store = state_store
         self.conversation = conversation_buffer
         self.summarizer = summarizer
+        self.l0_summary_msgs = int(l0_summary_msgs)
 
     def _load_master(self) -> str:
         if not os.path.exists(self.paths.master_path()):
@@ -47,8 +48,6 @@ class CompactionRunner:
 
         job_type = job.get("type", "")
 
-        # Preconditions to avoid overflowing the next level.
-        # If blocked, requeue current job and ensure higher-level job exists.
         if job_type == "COMPACT_L0_TO_L1" and len(state["l1_active"]) >= 3:
             queue.enqueue_once("COMPACT_L1_TO_L2")
             queue.jobs.append(job)
@@ -70,10 +69,8 @@ class CompactionRunner:
             self.state_store.save(state)
             return False
 
-        # ---- Execute ONE job ----
         if job_type == "COMPACT_L3_TO_L4":
             if len(state["l3_active"]) < 2:
-                # nothing to do
                 state["jobs"] = queue.jobs
                 self.state_store.save(state)
                 return False
@@ -85,8 +82,6 @@ class CompactionRunner:
             master = self._load_master()
             master_new = self.summarizer.l3_to_l4_master(master, a_txt, b_txt)
             self._save_master(master_new)
-
-            # remove the oldest two; newest (and any beyond) remains as buffer
             state["l3_active"] = state["l3_active"][2:]
 
         elif job_type == "COMPACT_L2_TO_L3":
@@ -124,8 +119,7 @@ class CompactionRunner:
             state["l2_active"].append(out)
 
         elif job_type == "COMPACT_L0_TO_L1":
-            # pop oldest 20 and keep last 10 in active.json
-            chunk = self.conversation.pop_oldest(20)
+            chunk = self.conversation.pop_oldest(self.l0_summary_msgs)
             if not chunk:
                 state["jobs"] = queue.jobs
                 self.state_store.save(state)
@@ -140,7 +134,6 @@ class CompactionRunner:
 
             state["l1_active"].append(out)
 
-        # Save updated state (job already removed by pop_next)
         state["jobs"] = queue.jobs
         self.state_store.save(state)
         return True

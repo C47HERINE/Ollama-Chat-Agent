@@ -12,6 +12,7 @@ import core.timeutils as t
 from memory_core.memory_manager import MemoryManager
 from memory_core.introspection import IntrospectionEngine
 
+
 CHAT_REGISTRY_PATH = os.path.join("agent_state", "known_chats.json")
 MEM_CONFIG_PATH = os.path.join("config", "memory_config.json")
 PROMPTS_PATH = os.path.join("config", "prompts.json")
@@ -20,7 +21,6 @@ load_dotenv()
 ollama_model = os.getenv("OLLAMA_MODEL")
 ollama_host = os.getenv("OLLAMA_HOST")
 telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-print("TELEGRAM_BOT_TOKEN =", repr(telegram_bot_token))
 print(f"[Ollama] Host: {ollama_host}")
 print(f"[Ollama] Model: {ollama_model}")
 
@@ -33,6 +33,7 @@ voice_prompt = os.getenv("VOICE_PROMPT_WAV")
 voice = VoiceRouter(audio_prompt_path=voice_prompt)
 introspection = IntrospectionEngine(t)
 
+
 def load_known_chats():
     if not os.path.exists(CHAT_REGISTRY_PATH):
         return set()
@@ -42,7 +43,7 @@ def load_known_chats():
         if isinstance(data, list):
             out = set()
             for x in data:
-                s = str(x)
+                s = str(x).strip()
                 if s.lstrip("-").isdigit():
                     out.add(int(s))
             return out
@@ -66,9 +67,7 @@ def main():
     for chat_id in list(known_chats):
         autopilot.register_chat(chat_id)
 
-    # Cache MemoryManager per telegram chat id
     memories = {}
-
     def get_memory_manager(_chat_id: int):
         _chat_id = int(_chat_id)
         if _chat_id not in memories:
@@ -88,14 +87,15 @@ def main():
             while not stop.is_set():
                 try:
                     telegram.send_chat_action(_chat_id, "typing")
-                except Exception:
+                except Exception as e:
+                    print(e)
                     pass
                 stop.wait(4.5)
 
         t = threading.Thread(target=_loop, daemon=True)
         t.start()
         try:
-            return (ollama.ask_messages(msgs, stream_to_console=False) or "")
+            return (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
         finally:
             stop.set()
 
@@ -112,28 +112,14 @@ def main():
         mm.after_assistant_sent()
 
     def introspection_fn(chat_id, state):
-        # Check if introspection is needed
         if introspection.should_introspect(state, silence_ms=3600_000):
             mm = get_memory_manager(chat_id)
             prompt = introspection.build_block()
-            
-            # Use memory manager to build context for introspection
-            # We treat this as a system/internal prompt, but we need context
             msgs = mm.build_chat_messages(prompt)
-            
-            # Ask LLM directly (no typing indicator for internal thought)
             out = (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
-            
             if out:
-                # Log to active raw conversation file
                 mm.on_message("system", out, kind="introspection")
-                
-                # Update state to mark introspection done
                 state["last_introspection_ms"] = t.now_ms()
-                # Note: state is a dict reference, so modification here affects the caller's state object
-                # which will be saved by autopilot.tick
-
-    # pass function objects (NO parentheses)
 
 
     while True:
@@ -207,5 +193,5 @@ def main():
             print(f"main : {e}")
             traceback.print_exc()
 
-if __name__ == "__main__":
-    main()
+
+main()
