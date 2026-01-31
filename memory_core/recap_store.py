@@ -16,11 +16,11 @@ class RecapStore:
         existing = sorted([n for n in os.listdir(self.level_dir) if n.lower().endswith(".md")])
         idx = len(existing) + 1
         path = os.path.join(self.level_dir, f"{prefix}_{idx:06d}.md")
-        write_text(path, (text or "").strip())
+        write_text(path, (text or ""))
         return path
 
     def read(self, path: str) -> str:
-        return read_text(path).strip()
+        return read_text(path)
 
     def delete(self, path: str) -> None:
         try:

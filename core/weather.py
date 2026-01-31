@@ -102,7 +102,7 @@ class WeatherInjector:
         w = self.fetch_weather_openweather()
         if w:
             temp = w.get("main", {}).get("temp")
-            condition = ((w.get("weather") or [{}])[0].get("main") or "").lower().strip()
+            condition = ((w.get("weather") or [{}])[0].get("main") or "").lower()
             unit = "°C" if self.units == "metric" else ("°F" if self.units == "imperial" else "K")
             if temp is not None and condition:
                 weather_line = f"• Weather: {round(temp)}{unit}, {condition}"
@@ -129,7 +129,7 @@ class WeatherInjector:
         # if not self.should_update_now():
         #     return None
         text = self.build_injection_text()
-        # if not text or not text.strip():
+        # if not text or not text:
         #     return None
         # self.mark_updated()
         return text

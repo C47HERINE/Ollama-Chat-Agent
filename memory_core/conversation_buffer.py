@@ -25,8 +25,8 @@ class ConversationBuffer:
             {
                 "role": str(role),
                 "ts_ms": int(time.time() * 1000),
-                "content": (content or "").strip(),
-                "kind": (kind or "").strip(),
+                "content": (content or ""),
+                "kind": (kind or ""),
             }
         )
         self._save(items)

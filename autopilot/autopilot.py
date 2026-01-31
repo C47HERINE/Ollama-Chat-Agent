@@ -135,33 +135,40 @@ class AutoPilot:
             lines.append("Next eligible autonomous send: now")
         return "\n".join(lines)
 
-    def tick(self, send_fn, generate_fn):
+    def tick(self, send_fn, generate_fn, introspection_fn=None):
         if t.now_s() < self.next_tick_s:
             return False
         self.next_tick_s = t.now_s() + self.tick_every_seconds
 
         for chat_id in list(self.known_chats):
             _state = self.load_state(chat_id)
+            
+            if introspection_fn:
+                introspection_fn(chat_id, _state)
+                self.save_state(chat_id, _state)
+
             if _state.get("scheduled_send_ms", 0) and t.now_ms() >= _state["scheduled_send_ms"]:
                 kind = _state.get("scheduled_kind") or "starter"
                 prompt = build_prompt(kind)
-
                 _state["scheduled_send_ms"] = 0
                 _state["scheduled_kind"] = ""
-                text = (generate_fn(chat_id, prompt) or "").strip()
+                text = (generate_fn(chat_id, prompt) or "")
                 if text:
                     send_fn(chat_id, text)
                     _state["last_outbound_text"] = text
                     policy.apply_post_send_updates(_state, kind, self.config)
                 self.save_state(chat_id, _state)
                 continue
+
             if _state.get("scheduled_send_ms", 0):
                 self.save_state(chat_id, _state)
                 continue
+
             if policy.should_schedule_addon(_state, self.config):
                 policy.schedule_addon(_state, self.config)
                 self.save_state(chat_id, _state)
                 continue
+
             if policy.should_schedule_starter(_state, self.config):
                 policy.schedule_starter(_state, self.config)
                 self.save_state(chat_id, _state)
