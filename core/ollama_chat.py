@@ -47,7 +47,7 @@ class OllamaChatbot:
 
     def summarize_ask(self, user_text: str, stream_to_console: bool = True) -> str:
         """Custom message builder"""
-        with open("./user/system/system_prompt.txt") as f:
+        with open("./user/system/system_prompt.txt", encoding="utf-8") as f:
             system_prompt = f.read()
         messages = [
             {"role": "system", "content": system_prompt},

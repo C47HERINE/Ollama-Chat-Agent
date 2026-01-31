@@ -13,7 +13,7 @@ class VoiceRouter:
         self.cfg_weight = 0.5
         self.exaggeration = 0.5
         self.temperature = 0.9
-        self.threshold_chars = 250
+        self.threshold_chars = 400
         self.batch_target_chars = 250
         self.batch_max_chars = 500
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
