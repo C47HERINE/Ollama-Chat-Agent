@@ -13,7 +13,7 @@ from memory_core.memory_manager import MemoryManager
 from memory_core.introspection import IntrospectionEngine
 
 
-CHAT_REGISTRY_PATH = os.path.join("agent_state", "known_chats.json")
+CHAT_REGISTRY_PATH = os.path.join("user", "known_chats.json")
 MEM_CONFIG_PATH = os.path.join("config", "memory_config.json")
 PROMPTS_PATH = os.path.join("config", "prompts.json")
 

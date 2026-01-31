@@ -23,8 +23,8 @@ def default_state():
     }
 
 
-def state_path(state_dir, chat_id):
-    return os.path.join(state_dir, f"state_{chat_id}.json")
+def state_path(root_dir, chat_id):
+    return os.path.join(root_dir, "user", "chats", str(chat_id), "state", "autopilot_state.json")
 
 
 def load_state(state_dir, chat_id):
@@ -45,6 +45,7 @@ def load_state(state_dir, chat_id):
 
 
 def save_state(state_dir, chat_id, st):
-    os.makedirs(state_dir, exist_ok=True)
-    with open(state_path(state_dir, chat_id), "w", encoding="utf-8") as f:
+    path = state_path(state_dir, chat_id)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(st, f, indent=2, ensure_ascii=False)
