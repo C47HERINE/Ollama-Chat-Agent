@@ -19,29 +19,20 @@ class MemoryPaths:
 
         self.l0_dir = os.path.join(self.chat_root, "l0")
         self.l1_dir = os.path.join(self.chat_root, "l1")
-        self.l2_dir = os.path.join(self.chat_root, "l2")
-        self.l3_dir = os.path.join(self.chat_root, "l3")
-        self.l4_dir = os.path.join(self.chat_root, "l4")
-        self.low_dir = os.path.join(self.chat_root, "low")
+        self.l4_dir = os.path.join(self.chat_root, "l4") # Kept for master record
         self.state_dir = os.path.join(self.chat_root, "state")
-        self.temp_dir = os.path.join(self.chat_root, "temp")
 
     def ensure(self) -> None:
+        # Only ensure directories that are actively used by the new architecture
         for d in [
             self.system_dir,
             self.user_context_dir,
             self.l0_dir,
             self.l1_dir,
-            self.l2_dir,
-            self.l3_dir,
-            self.l4_dir,
-            self.state_dir,
-            self.temp_dir,
+            self.l4_dir, # Kept for master record
+            self.state_dir
         ]:
             ensure_dir(d)
-
-    def weather_active_path(self) -> str:
-        return os.path.join(self.low_dir, "weather.md")
 
     def l0_active_path(self) -> str:
         return os.path.join(self.l0_dir, "active.json")
@@ -50,13 +41,8 @@ class MemoryPaths:
         return os.path.join(self.l0_dir, "archive.jsonl")
 
     def master_path(self) -> str:
-        return os.path.join(self.l4_dir, "master.md")
+        # Master record is now a JSON file
+        return os.path.join(self.l4_dir, "master.json")
 
     def state_path(self) -> str:
         return os.path.join(self.state_dir, "state.json")
-
-    def cache_path(self) -> str:
-        return os.path.join(self.temp_dir, "context_cache.json")
-
-    def context_txt_path(self) -> str:
-        return os.path.join(self.temp_dir, "context.txt")

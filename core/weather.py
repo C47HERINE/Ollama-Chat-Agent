@@ -1,94 +1,52 @@
 import json
 import os
-
 import requests
 from dotenv import load_dotenv
-
 import core.timeutils as core_time
 
 load_dotenv()
 
-
 class WeatherInjector:
-    """Hourly background context injection (based on local date + hour)."""
+    """
+    Generates fresh context injection (time and environment) on every call.
+    No caching, no state files.
+    """
 
-    def __init__(self, low_dir="./user/low", state_file="weather_state.json"):
-        self.state_dir = low_dir
-        self.state_path = os.path.join(low_dir, state_file)
-        os.makedirs(self.state_dir, exist_ok=True)
+    def __init__(self):
         self.lat = os.getenv("LAT")
         self.lon = os.getenv("LON")
         self.tz = os.getenv("TZ")
         self.units = os.getenv("UNITS") or "metric"
         self.api_key = os.getenv("OPENWEATHER_API_KEY")
-        self.state = self.load_state()
-
-    def load_state(self):
-        default = {"last_date": "", "last_hour": -1}
-        if not os.path.exists(self.state_path):
-            return default
-        try:
-            with open(self.state_path, encoding="utf-8") as f:
-                data = json.load(f)
-            if not isinstance(data, dict):
-                return default
-            last_date = data.get("last_date", "")
-            last_hour = data.get("last_hour", -1)
-            if not isinstance(last_date, str):
-                last_date = ""
-            if not isinstance(last_hour, int):
-                last_hour = -1
-            return {"last_date": last_date, "last_hour": last_hour}
-        except (OSError, ValueError, json.JSONDecodeError):
-            return default
-
-    def save_state(self):
-        try:
-            with open(self.state_path, "w", encoding="utf-8") as f:
-                json.dump(self.state, f, indent=2, ensure_ascii=False)
-        except OSError:
-            pass
-
-    def should_update_now(self):
-        if not self.lat or not self.lon:
-            return False
-        dt = core_time.local_dt()
-        now_date = dt.strftime("%Y-%m-%d")
-        now_hour = dt.hour
-        last_date = self.state.get("last_date", "")
-        last_hour = self.state.get("last_hour", -1)
-        return (last_date != now_date) or (last_hour != now_hour)
-
-    def mark_updated(self):
-        dt = core_time.local_dt()
-        self.state["last_date"] = dt.strftime("%Y-%m-%d")
-        self.state["last_hour"] = dt.hour
-        self.save_state()
 
     def fetch_sunrise_sunset(self):
         url = "https://api.sunrise-sunset.org/json"
         params = {"lat": self.lat, "lng": self.lon, "formatted": 0}
         if self.tz:
             params["tzid"] = self.tz
-        r = requests.get(url, params=params, timeout=20)
-        r.raise_for_status()
-        data = r.json() or {}
-        return data.get("results", {}) or {}
+        try:
+            r = requests.get(url, params=params, timeout=5) # Short timeout to not block chat
+            r.raise_for_status()
+            data = r.json() or {}
+            return data.get("results", {}) or {}
+        except Exception:
+            return {}
 
     def fetch_weather_openweather(self):
         if not self.api_key:
             return None
         url = "https://api.openweathermap.org/data/2.5/weather"
         params = {"lat": self.lat, "lon": self.lon, "appid": self.api_key, "units": self.units}
-        r = requests.get(url, params=params, timeout=20)
-        r.raise_for_status()
-        return r.json()
+        try:
+            r = requests.get(url, params=params, timeout=5) # Short timeout
+            r.raise_for_status()
+            return r.json()
+        except Exception:
+            return None
 
     def build_injection_text(self) -> str:
-        try:
-            ss = self.fetch_sunrise_sunset()
-        except requests.exceptions.RequestException:
-            return ""
+        # Always fetch fresh data
+        ss = self.fetch_sunrise_sunset()
         sunrise = ss.get("sunrise", "")
         sunset = ss.get("sunset", "")
 
@@ -110,6 +68,7 @@ class WeatherInjector:
                 weather_line = f"• Weather: {round(temp)}{unit}"
             elif condition:
                 weather_line = f"• Weather: {condition}"
+        
         dt = core_time.local_dt()
 
         header = "Context update (time and environment)"
@@ -123,13 +82,8 @@ class WeatherInjector:
         ]
         if weather_line:
             lines.append(weather_line)
+            
         return "\n".join(lines)
 
     def weather_updater(self):
-        # if not self.should_update_now():
-        #     return None
-        text = self.build_injection_text()
-        # if not text or not text:
-        #     return None
-        # self.mark_updated()
-        return text
+        return self.build_injection_text()

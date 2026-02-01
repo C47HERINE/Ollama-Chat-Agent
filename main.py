@@ -61,6 +61,24 @@ def remember_chat(chat_id, known):
         known.add(chat_id)
         save_known_chats(known)
 
+def save_debug_log(chat_id, prompt_msgs):
+    debug_dir = os.path.join("user", "chats", str(chat_id), "debug")
+    os.makedirs(debug_dir, exist_ok=True)
+    filename = f"prompt_log_{int(time.time())}.json"
+    path = os.path.join(debug_dir, filename)
+    
+    data = {
+        "timestamp": t.now_ms(),
+        "prompt_messages": prompt_msgs
+    }
+    
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        print(f"[Debug] Saved prompt log to {path}")
+    except Exception as e:
+        print(f"[Debug] Failed to save log: {e}")
+
 def main():
     print("Main loop started...")
     known_chats = load_known_chats()
@@ -102,6 +120,12 @@ def main():
     def generate_fn(chat_id, prompt_text):
         mm = get_memory_manager(chat_id)
         msgs = mm.build_chat_messages(prompt_text)
+        
+        # Check debug mode
+        st = autopilot.load_state(chat_id)
+        if st.get("debug_mode", False):
+            save_debug_log(chat_id, msgs)
+            
         return ask_with_typing(chat_id, msgs)
 
     def send_fn(chat_id, text_to_send):
@@ -161,6 +185,16 @@ def main():
                     telegram.send_message(chat_id, reply)
                     memory_manager.after_assistant_sent()
                     continue
+                    
+                if text == "/debug":
+                    st = autopilot.load_state(chat_id)
+                    new_mode = not st.get("debug_mode", False)
+                    st["debug_mode"] = new_mode
+                    autopilot.save_state(chat_id, st)
+                    reply = f"Debug mode: {'ON' if new_mode else 'OFF'}"
+                    telegram.send_message(chat_id, reply)
+                    # Do NOT log this command or reply to memory
+                    continue
 
                 # ---- Normal inbound ----
                 autopilot.observe_inbound(chat_id, text)
@@ -169,7 +203,14 @@ def main():
                 memory_manager.on_message(f"user", text, kind="inbound")
 
                 # 2) ask model with injected context
+                # generate_fn logic is duplicated here for direct reply, so we need to add debug check here too
                 messages = memory_manager.build_chat_messages(text)
+                
+                # Check debug mode
+                st = autopilot.load_state(chat_id)
+                if st.get("debug_mode", False):
+                    save_debug_log(chat_id, messages)
+
                 reply = ask_with_typing(chat_id, messages)
                 if reply:
 

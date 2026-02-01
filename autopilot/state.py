@@ -5,6 +5,7 @@ import os
 def default_state():
     return {
         "paused": False,
+        "debug_mode": False, # New field
         "last_inbound_ms": 0,
         "last_outbound_ms": 0,
         "last_inbound_text": "",

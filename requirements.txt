@@ -4,3 +4,5 @@ python-dotenv~=1.2.1
 numpy~=1.25.2
 torch~=2.7.1+cu128
 python-telegram-bot
+chromadb
+tiktoken
