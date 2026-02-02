@@ -1,73 +1,113 @@
 import chromadb
 import requests
 import json
+import logging
+import traceback
+from collections import Counter
+
+logger = logging.getLogger(__name__)
 
 class VectorManager:
     def __init__(self, collection_name="memory_bullets", host="http://localhost:11434", model="embeddinggemma"):
-        self.client = chromadb.PersistentClient(path="./chroma_db_new") # Use a new, clean database
-        self.collection = self.client.get_or_create_collection(name=collection_name)
-        self.host = host
-        self.model = model
+        try:
+            self.client = chromadb.PersistentClient(path="./chroma_db_new")
+            self.collection_name = collection_name # Store collection name
+            self.collection = self.client.get_or_create_collection(name=self.collection_name)
+            self.host = host
+            self.model = model
+        except Exception as e:
+            logger.error(f"Failed to initialize VectorManager: {e}")
+            logger.error(traceback.format_exc())
+            raise
 
     def _get_embedding(self, text, prefix=""):
-        url = f"{self.host}/api/embeddings"
-        payload = {"model": self.model, "prompt": f"{prefix}{text}"}
         try:
+            url = f"{self.host}/api/embeddings"
+            payload = {"model": self.model, "prompt": f"{prefix}{text}"}
             response = requests.post(url, json=payload)
             response.raise_for_status()
             return response.json()["embedding"]
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request failed for embedding: {e}")
+            logger.error(traceback.format_exc())
+            return None
         except Exception as e:
-            print(f"Error getting embedding: {e}")
+            logger.error(f"An unexpected error occurred in _get_embedding: {e}")
+            logger.error(traceback.format_exc())
             return None
 
-    def index_bullets(self, l1_id, bullets):
-        if not bullets:
-            return
+    def add_to_index(self, bullets: list[str], file_id: str):
+        try:
+            if not bullets:
+                return
 
-        # Process in batches to be safe
-        batch_size = 50
-        for i in range(0, len(bullets), batch_size):
-            batch_bullets = bullets[i:i+batch_size]
+            prefix = "title: none | text: "
+            embeddings = [self._get_embedding(bullet, prefix=prefix) for bullet in bullets]
             
-            embeddings = []
-            valid_bullets_in_batch = []
-            for bullet in batch_bullets:
-                emb = self._get_embedding(bullet, prefix="title: none | text: ")
-                if emb:
-                    embeddings.append(emb)
-                    valid_bullets_in_batch.append(bullet)
-            
-            if not embeddings:
-                continue
+            valid_bullets = [b for i, b in enumerate(bullets) if embeddings[i] is not None]
+            valid_embeddings = [emb for emb in embeddings if emb is not None]
 
-            ids = [f"{l1_id}_{i+j}" for j, _ in enumerate(valid_bullets_in_batch)]
-            metadatas = [{"source_id": l1_id} for _ in valid_bullets_in_batch]
+            if not valid_embeddings:
+                logger.warning(f"No valid embeddings generated for file {file_id}.")
+                return
+
+            ids = [f"{file_id}_{i}" for i in range(len(valid_embeddings))]
+            metadatas = [{"source_file": file_id} for _ in valid_embeddings]
             
             self.collection.upsert(
                 ids=ids,
-                embeddings=embeddings,
+                embeddings=valid_embeddings,
                 metadatas=metadatas,
-                documents=valid_bullets_in_batch
+                documents=valid_bullets
             )
+            logger.info(f"Embedded {len(valid_embeddings)} bullets for file {file_id}")
+        except Exception as e:
+            logger.error(f"Failed to add to index for file {file_id}: {e}")
+            logger.error(traceback.format_exc())
 
-    def search_and_vote(self, query, top_k_bullets=50, top_n_files=3):
-        query_emb = self._get_embedding(query, prefix="task: search result | query: ")
-        if not query_emb:
+    def search_and_vote(self, query: str, top_k_bullets: int = 50, top_n_files: int = 3) -> list[str]:
+        try:
+            prefix = "task: search result | query: "
+            query_emb = self._get_embedding(query, prefix=prefix)
+            if not query_emb:
+                logger.warning("Could not generate query embedding. Aborting search.")
+                return []
+
+            results = self.collection.query(
+                query_embeddings=[query_emb],
+                n_results=top_k_bullets
+            )
+            
+            if not results or not results.get('ids') or not results['ids'][0]:
+                logger.info("Vector search returned no results.")
+                return []
+
+            logger.info(f"Vector search returned {len(results['ids'][0])} initial candidates.")
+
+            metadatas = results.get('metadatas', [[]])[0]
+            source_files = [meta.get('source_file') for meta in metadatas if meta and meta.get('source_file')]
+            
+            if not source_files:
+                logger.warning("Vector search results were found, but they contained no 'source_file' metadata.")
+                return []
+
+            vote_counts = Counter(source_files)
+            top_files = [item[0] for item in vote_counts.most_common(top_n_files)]
+            
+            logger.info(f"Voting resulted in top {len(top_files)} files: {top_files}")
+            return top_files
+            
+        except Exception as e:
+            logger.error(f"Failed during search and vote for query '{query[:50]}...': {e}")
+            logger.error(traceback.format_exc())
             return []
 
-        results = self.collection.query(
-            query_embeddings=[query_emb],
-            n_results=top_k_bullets
-        )
-
-        if not results or not results.get('metadatas') or not results['metadatas'][0]:
-            return []
-
-        votes = {}
-        for meta in results['metadatas'][0]:
-            src_id = meta.get('source_id')
-            if src_id:
-                votes[src_id] = votes.get(src_id, 0) + 1
-        
-        sorted_files = sorted(votes.items(), key=lambda item: item[1], reverse=True)
-        return [f[0] for f in sorted_files[:top_n_files]]
+    def reset_collection(self):
+        try:
+            logger.info(f"Attempting to delete ChromaDB collection: {self.collection_name}")
+            self.client.delete_collection(name=self.collection_name)
+            self.collection = self.client.get_or_create_collection(name=self.collection_name) # Re-create empty collection
+            logger.info(f"ChromaDB collection '{self.collection_name}' reset successfully.")
+        except Exception as e:
+            logger.error(f"Failed to reset ChromaDB collection '{self.collection_name}': {e}")
+            logger.error(traceback.format_exc())

@@ -1,6 +1,10 @@
 import os
 import json
+import logging
+import traceback
 from .vector_manager import VectorManager
+
+logger = logging.getLogger(__name__)
 
 class MemoryIntegrityManager:
     def __init__(self, l1_dir, vector_manager: VectorManager):
@@ -8,43 +12,44 @@ class MemoryIntegrityManager:
         self.vm = vector_manager
 
     def sync(self):
-        print("Starting Memory Integrity Sync...")
-        # Get all indexed source_ids
-        # Chroma doesn't have a direct "get all unique metadata values" efficiently, 
-        # but we can iterate or just re-index missing ones.
-        # For simplicity/robustness, we'll scan files and check if they are in DB.
-        # A more optimized way would be to query all IDs, but let's assume we can just upsert.
-        # Actually, upsert is idempotent. We can just re-index everything or check count.
-        # To be smarter: check if file ID exists in collection.
-        
-        # Get all L1 files
-        if not os.path.exists(self.l1_dir):
-            print(f"L1 directory not found: {self.l1_dir}")
-            return
+        logger.info("Starting Memory Integrity Sync...")
+        try:
+            if not os.path.exists(self.l1_dir):
+                logger.warning(f"L1 directory not found: {self.l1_dir}")
+                return
 
-        files = [f for f in os.listdir(self.l1_dir) if f.endswith(".json")]
+            files = [f for f in os.listdir(self.l1_dir) if f.endswith(".json")]
+            
+            for filename in files:
+                self._sync_file(filename)
         
-        for filename in files:
-            file_path = os.path.join(self.l1_dir, filename)
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                l1_id = data.get("id")
-                bullets = data.get("bullets", [])
-                
-                if not l1_id:
-                    print(f"Skipping {filename}: No ID found.")
-                    continue
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during sync: {e}")
+            logger.error(traceback.format_exc())
+        
+        logger.info("Memory Integrity Sync Complete.")
 
-                # Check if already indexed (naive check: query for one bullet or just upsert)
-                # We will just upsert to ensure integrity. 
-                # Optimization: Check if any doc with source_id exists.
-                existing = self.vm.collection.get(where={"source_id": l1_id}, limit=1)
-                if not existing['ids']:
-                    print(f"Indexing missing file: {filename}")
-                    self.vm.index_bullets(l1_id, bullets)
-                
-            except Exception as e:
-                print(f"Error processing {filename}: {e}")
-        print("Memory Integrity Sync Complete.")
+    def _sync_file(self, filename):
+        file_path = os.path.join(self.l1_dir, filename)
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            l1_id = data.get("id")
+            bullets = data.get("bullets", [])
+            
+            if not l1_id:
+                logger.warning(f"Skipping {filename}: No ID found.")
+                return
+
+            existing = self.vm.collection.get(where={"source_file": l1_id}, limit=1)
+            if not existing['ids']:
+                logger.info(f"Indexing missing file: {filename}")
+                self.vm.add_to_index(bullets, l1_id)
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON from {filename}: {e}")
+            logger.error(traceback.format_exc())
+        except Exception as e:
+            logger.error(f"Error processing file {filename}: {e}")
+            logger.error(traceback.format_exc())

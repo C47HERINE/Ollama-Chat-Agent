@@ -29,9 +29,13 @@ class OllamaChatbot:
         response = self._make_request("/api/generate", payload)
         if response:
             try:
-                return response.json().get("response", "")
-            except json.JSONDecodeError:
+                json_resp = response.json()
+                return json_resp.get("response", "")
+            except json.JSONDecodeError as e:
+                print(f"[OllamaChat] JSON Decode Error: {e}. Raw response: {response.text[:100]}...")
                 return ""
+        else:
+            print("[OllamaChat] No response received.")
         return ""
 
     def stream_chat(self, messages, on_token=None):

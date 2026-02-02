@@ -3,6 +3,7 @@ import os
 import threading
 import time
 import traceback
+import logging
 from dotenv import load_dotenv
 from autopilot.autopilot import AutoPilot
 from core.ollama_chat import OllamaChatbot
@@ -12,6 +13,8 @@ import core.timeutils as t
 from memory_core.memory_manager import MemoryManager
 from memory_core.introspection import IntrospectionEngine
 
+# --- Logging Configuration ---
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 CHAT_REGISTRY_PATH = os.path.join("user", "known_chats.json")
 MEM_CONFIG_PATH = os.path.join("config", "memory_config.json")
@@ -21,14 +24,12 @@ load_dotenv()
 ollama_model = os.getenv("OLLAMA_MODEL")
 ollama_host = os.getenv("OLLAMA_HOST")
 telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-print(f"[Ollama] Host: {ollama_host}")
-print(f"[Ollama] Model: {ollama_model}")
+logging.info(f"[Ollama] Host: {ollama_host}")
+logging.info(f"[Ollama] Model: {ollama_model}")
 
 telegram = TelegramBot(telegram_bot_token)
 autopilot = AutoPilot(tick_every_seconds=30)
 ollama = OllamaChatbot(ollama_model, ollama_host)
-ollama_host = os.getenv("OLLAMA_HOST")
-ollama_model = os.getenv("OLLAMA_MODEL")
 voice_prompt = os.getenv("VOICE_PROMPT_WAV")
 voice = VoiceRouter(audio_prompt_path=voice_prompt)
 introspection = IntrospectionEngine(t)
@@ -47,14 +48,17 @@ def load_known_chats():
                 if s.lstrip("-").isdigit():
                     out.add(int(s))
             return out
-    except (OSError, ValueError, json.JSONDecodeError):
-        pass
+    except (OSError, ValueError, json.JSONDecodeError) as e:
+        logging.warning(f"Could not load known chats: {e}")
     return set()
 
 def save_known_chats(chat_ids):
-    os.makedirs(os.path.dirname(CHAT_REGISTRY_PATH), exist_ok=True)
-    with open(CHAT_REGISTRY_PATH, "w", encoding="utf-8") as f:
-        json.dump(sorted(list(chat_ids)), f, indent=2)
+    try:
+        os.makedirs(os.path.dirname(CHAT_REGISTRY_PATH), exist_ok=True)
+        with open(CHAT_REGISTRY_PATH, "w", encoding="utf-8") as f:
+            json.dump(sorted(list(chat_ids)), f, indent=2)
+    except IOError as e:
+        logging.error(f"Could not save known chats: {e}")
 
 def remember_chat(chat_id, known):
     if chat_id not in known:
@@ -75,12 +79,12 @@ def save_debug_log(chat_id, prompt_msgs):
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        print(f"[Debug] Saved prompt log to {path}")
+        logging.info(f"[Debug] Saved prompt log to {path}")
     except Exception as e:
-        print(f"[Debug] Failed to save log: {e}")
+        logging.error(f"[Debug] Failed to save log: {e}")
 
 def main():
-    print("Main loop started...")
+    logging.info("Main loop started...")
     known_chats = load_known_chats()
     for chat_id in list(known_chats):
         autopilot.register_chat(chat_id)
@@ -106,8 +110,7 @@ def main():
                 try:
                     telegram.send_chat_action(_chat_id, "typing")
                 except Exception as e:
-                    print(e)
-                    pass
+                    logging.warning(f"Failed to send typing action: {e}")
                 stop.wait(4.5)
 
         t = threading.Thread(target=_loop, daemon=True)
@@ -121,7 +124,6 @@ def main():
         mm = get_memory_manager(chat_id)
         msgs = mm.build_chat_messages(prompt_text)
         
-        # Check debug mode
         st = autopilot.load_state(chat_id)
         if st.get("debug_mode", False):
             save_debug_log(chat_id, msgs)
@@ -152,87 +154,89 @@ def main():
                 remember_chat(chat_id, known_chats)
                 autopilot.register_chat(chat_id)
                 memory_manager = get_memory_manager(chat_id)
-                # ---- Commands (minimal) ----
-                if text == "/start":
-                    reply = f"Hi! I'm online."
-                    telegram.send_message(chat_id, reply)
-                    autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
-                    memory_manager.after_assistant_sent()
-                    continue
+                
+                if text.startswith("/"):
+                    parts = text.split(" ", 1)
+                    command = parts[0]
+                    query = parts[1] if len(parts) > 1 else ""
 
-                if text == "/pause":
-                    st = autopilot.load_state(chat_id)
-                    st["paused"] = True
-                    autopilot.save_state(chat_id, st)
-                    reply = "Paused. I won't initiate messages here."
-                    telegram.send_message(chat_id, reply)
-                    autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
-                    memory_manager.after_assistant_sent()
-                    continue
+                    if command == "/search":
+                        if not query:
+                            telegram.send_message(chat_id, "Usage: /search <your query>")
+                        else:
+                            mm = get_memory_manager(chat_id)
+                            top_files = mm.vector_manager.search_and_vote(query)
+                            reply = f"Search results for '{query}':\n"
+                            if not top_files:
+                                reply += "No relevant memories found."
+                            else:
+                                reply += "\n".join([f"- {file_id}" for file_id in top_files])
+                            telegram.send_message(chat_id, reply)
+                        continue
 
-                if text == "/resume":
-                    st = autopilot.load_state(chat_id)
-                    st["paused"] = False
-                    autopilot.save_state(chat_id, st)
-                    reply = "Resumed. I may initiate messages again."
-                    telegram.send_message(chat_id, reply)
-                    autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
-                    memory_manager.after_assistant_sent()
-                    continue
+                    if command == "/start":
+                        reply = f"Hi! I'm online."
+                        telegram.send_message(chat_id, reply)
+                        autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
+                        memory_manager.after_assistant_sent()
+                        continue
 
-                if text == "/status":
-                    reply = autopilot.format_status(chat_id) or ""
-                    telegram.send_message(chat_id, reply)
-                    memory_manager.after_assistant_sent()
-                    continue
-                    
-                if text == "/debug":
-                    st = autopilot.load_state(chat_id)
-                    new_mode = not st.get("debug_mode", False)
-                    st["debug_mode"] = new_mode
-                    autopilot.save_state(chat_id, st)
-                    reply = f"Debug mode: {'ON' if new_mode else 'OFF'}"
-                    telegram.send_message(chat_id, reply)
-                    # Do NOT log this command or reply to memory
-                    continue
+                    if command == "/pause":
+                        st = autopilot.load_state(chat_id)
+                        st["paused"] = True
+                        autopilot.save_state(chat_id, st)
+                        reply = "Paused. I won't initiate messages here."
+                        telegram.send_message(chat_id, reply)
+                        autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
+                        memory_manager.after_assistant_sent()
+                        continue
 
-                # ---- Normal inbound ----
+                    if command == "/resume":
+                        st = autopilot.load_state(chat_id)
+                        st["paused"] = False
+                        autopilot.save_state(chat_id, st)
+                        reply = "Resumed. I may initiate messages again."
+                        telegram.send_message(chat_id, reply)
+                        autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
+                        memory_manager.after_assistant_sent()
+                        continue
+
+                    if command == "/status":
+                        reply = autopilot.format_status(chat_id) or ""
+                        telegram.send_message(chat_id, reply)
+                        memory_manager.after_assistant_sent()
+                        continue
+                        
+                    if command == "/debug":
+                        st = autopilot.load_state(chat_id)
+                        new_mode = not st.get("debug_mode", False)
+                        st["debug_mode"] = new_mode
+                        autopilot.save_state(chat_id, st)
+                        reply = f"Debug mode: {'ON' if new_mode else 'OFF'}"
+                        telegram.send_message(chat_id, reply)
+                        continue
+
                 autopilot.observe_inbound(chat_id, text)
-
-                # 1) log inbound + build context (string returned)
                 memory_manager.on_message(f"user", text, kind="inbound")
-
-                # 2) ask model with injected context
-                # generate_fn logic is duplicated here for direct reply, so we need to add debug check here too
                 messages = memory_manager.build_chat_messages(text)
                 
-                # Check debug mode
                 st = autopilot.load_state(chat_id)
                 if st.get("debug_mode", False):
                     save_debug_log(chat_id, messages)
 
                 reply = ask_with_typing(chat_id, messages)
                 if reply:
-
-                    # 3) log outbound assistant reply (sanitized)
                     memory_manager.on_message("assistant", reply, kind="reply")
-
-                    # 4) send reply (sanitized)
                     kind, sent_text = voice.send(telegram, chat_id, reply)
-
-                    # 5) autopilot observes outbound
                     autopilot.observe_outbound(
                         chat_id, sent_text, cooldown_minutes=1, allow_addon=True)
-
-                    # 6) run one compaction after send
                     memory_manager.after_assistant_sent()
 
             autopilot.tick(send_fn=send_fn, generate_fn=generate_fn, introspection_fn=introspection_fn)
             time.sleep(0.3)
 
         except Exception as e:
-            print(f"main : {e}")
+            logging.critical(f"FATAL ERROR in main loop: {e}")
             traceback.print_exc()
-
 
 main()

@@ -1,38 +1,40 @@
 import os
+import logging
+import traceback
+from .helpers import read_json, write_json
 
-from memory_core.helpers import read_json, write_json
-
+logger = logging.getLogger(__name__)
 
 class StateStore:
-    """
-    Load/save the per-chat state.json (persistent).
-    """
+    def __init__(self, path):
+        self.path = path
 
-    def __init__(self, state_path: str):
-        self.state_path = state_path
-
-    def ensure_exists(self) -> None:
-        if os.path.exists(self.state_path):
-            return
-        # Initialize with only the fields needed for the new architecture
-        self.save({"l1_active": [], "jobs": [], "ephemeral": {}})
+    def ensure_exists(self):
+        try:
+            if not os.path.exists(self.path):
+                write_json(self.path, {"jobs": []})
+        except Exception as e:
+            logger.error(f"Failed to ensure state file exists at {self.path}: {e}")
+            logger.error(traceback.format_exc())
 
     def load(self) -> dict:
-        state = read_json(self.state_path)
-        if not isinstance(state, dict):
-            state = {}
-        
-        # Ensure required fields exist
-        state.setdefault("l1_active", [])
-        state.setdefault("jobs", [])
-        state.setdefault("ephemeral", {})
-        
-        # Clean up obsolete fields if they exist in the file
-        for key in ["l2_active", "l3_active"]:
-            if key in state:
-                del state[key]
+        try:
+            data = read_json(self.path)
+            if not isinstance(data, dict):
+                logger.warning(f"State file at {self.path} is not a dict, re-initializing.")
+                self.ensure_exists()
+                return {"jobs": []}
+            return data
+        except Exception as e:
+            logger.error(f"Failed to load state from {self.path}: {e}")
+            logger.error(traceback.format_exc())
+            return {"jobs": []} # Return a default state on failure
 
-        return state
-
-    def save(self, st: dict) -> None:
-        write_json(self.state_path, st)
+    def save(self, state: dict):
+        try:
+            if not isinstance(state, dict):
+                raise ValueError("State must be a dictionary.")
+            write_json(self.path, state)
+        except Exception as e:
+            logger.error(f"Failed to save state to {self.path}: {e}")
+            logger.error(traceback.format_exc())
