@@ -1,12 +1,9 @@
 import json
 import os
 import tiktoken
-import logging
 import traceback
 from .helpers import read_text, write_text
 from core import weather
-
-logger = logging.getLogger(__name__)
 
 class PromptBuilder:
     def __init__(self, paths, vector_manager, config, model_encoding="cl100k_base"):
@@ -25,15 +22,16 @@ class PromptBuilder:
             
             self.effective_limit = self.max_context - self.safety_buffer
         except Exception as e:
-            logger.error(f"Failed to initialize PromptBuilder: {e}")
-            logger.error(traceback.format_exc())
+            print(e)
+            traceback.print_exc()
             raise
 
     def _count_tokens(self, text):
         try:
             return len(self.encoding.encode(text))
         except Exception as e:
-            logger.error(f"Failed to count tokens: {e}")
+            print(e)
+            traceback.print_exc()
             return len(text) // 4 # Fallback approximation
 
     def _load_json(self, path):
@@ -43,7 +41,8 @@ class PromptBuilder:
             with open(path, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except (IOError, json.JSONDecodeError) as e:
-            logger.error(f"Failed to load JSON from {path}: {e}")
+            print(e)
+            traceback.print_exc()
             return {}
 
     def _read_folder(self, folder: str, exclude_files: list = None) -> str:
@@ -62,23 +61,25 @@ class PromptBuilder:
                         parts.append(f.read())
             return "\n\n".join(parts)
         except IOError as e:
-            logger.error(f"Failed to read folder {folder}: {e}")
+            print(e)
+            traceback.print_exc()
             return ""
 
     def _flatten_l4(self, l4_data):
-        # This function is unlikely to fail, but good practice
         try:
             md = "## MASTER RECORD (AI's understanding of the user)\n"
-            if l4_data.get("bio"): md += f"**Bio:** {l4_data['bio']}\n"
+            if l4_data.get("bio"):
+                md += f"**Bio:** {l4_data['bio']}\n"
             if l4_data.get("relationships"):
                 md += "**Relationships:**\n"
-                for k, v in l4_data.get('relationships', {}).items(): md += f"- {k}: {v}\n"
-            if l4_data.get("user_status"):
-                md += "**User Status:**\n"
-                for k, v in l4_data.get('user_status', {}).items(): md += f"- {k}: {v}\n"
+                for k, v in l4_data.get('relationships', {}).items():
+                    md += f"- {k}: {v}\n"
+            if l4_data.get("psychological_profile"):
+                md += f"**Psychological Profile:** {l4_data['psychological_profile']}\n"
             return md
         except Exception as e:
-            logger.error(f"Failed to flatten L4 data: {e}")
+            print(e)
+            traceback.print_exc()
             return "## MASTER RECORD (Error)\n"
 
     def _flatten_l1(self, l1_data):
@@ -88,7 +89,8 @@ class PromptBuilder:
             md += f"**Diary:** {l1_data.get('diary', '')}\n"
             return md
         except Exception as e:
-            logger.error(f"Failed to flatten L1 data: {e}")
+            print(e)
+            traceback.print_exc()
             return f"### Entry ID: {l1_data.get('id', 'unknown')} (Error)\n"
 
     def build_prompt(self, user_input, active_chat_history):
@@ -119,15 +121,14 @@ class PromptBuilder:
 
             # Vector Search
             relevant_ids = self.vm.search_and_vote(user_input, top_n_files=self.archived_count)
-            logger.info(f"Archived memories retrieved for prompt: {relevant_ids}")
             archived_text = "## ARCHIVED MEMORIES\n"
-            active_rules = []
+            active_core_principles = []
             for rid in relevant_ids:
                 fpath = os.path.join(self.paths.l1_dir, f"{rid}.json")
                 l1 = self._load_json(fpath)
                 if l1:
                     archived_text += self._flatten_l1(l1) + "\n"
-                    active_rules.extend(l1.get("rules_locked", []))
+                    active_core_principles.extend(l1.get("core_principles", []))
 
             # Recent Memory
             l1_files = sorted([f for f in os.listdir(self.paths.l1_dir) if f.endswith(".json")])
@@ -137,18 +138,19 @@ class PromptBuilder:
                 l1 = self._load_json(fpath)
                 if l1:
                     recent_text += self._flatten_l1(l1) + "\n"
-                    active_rules.extend(l1.get("rules_locked", []))
+                    active_core_principles.extend(l1.get("core_principles", []))
 
             # Weather
             weather_text = self.weather_injector.weather_updater() or ""
             if weather_text: weather_text = f"## LOW PRIORITY INFO\n{weather_text}\n"
 
-            # Rules
-            active_rules.extend(l4_data.get("hard_locked_rules", []))
-            persona_anchor = "## OPERATIONAL RULES\n" + "\n".join([f"- {r}" for r in sorted(list(set(active_rules)))])
+            # Core Principles
+            active_core_principles.extend(l4_data.get("core_principles", []))
+            persona_anchor = "## CORE PRINCIPLES\n" + "\n".join([f"- {r}" for r in sorted(list(set(active_core_principles)))])
 
             # Chat History
-            chat_text = "## CURRENT CONVERSATION\n" + "".join(f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}\n" for msg in active_chat_history)
+            chat_history_slice = active_chat_history[-60:]
+            chat_text = "## CURRENT CONVERSATION\n" + "".join(f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}\n" for msg in chat_history_slice)
 
             # Assemble and Truncate
             must_have = f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{persona_anchor}\n\n{chat_text}"
@@ -163,6 +165,6 @@ class PromptBuilder:
             return f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{optional_context}\n\n{persona_anchor}\n\n{chat_text}"
 
         except Exception as e:
-            logger.error(f"Fatal error in build_prompt: {e}")
-            logger.error(traceback.format_exc())
+            print(e)
+            traceback.print_exc()
             return f"SYSTEM: An error occurred building the prompt. User input was: {user_input}"

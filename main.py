@@ -3,7 +3,6 @@ import os
 import threading
 import time
 import traceback
-import logging
 from dotenv import load_dotenv
 from autopilot.autopilot import AutoPilot
 from core.ollama_chat import OllamaChatbot
@@ -13,9 +12,6 @@ import core.timeutils as t
 from memory_core.memory_manager import MemoryManager
 from memory_core.introspection import IntrospectionEngine
 
-# --- Logging Configuration ---
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
 CHAT_REGISTRY_PATH = os.path.join("user", "known_chats.json")
 MEM_CONFIG_PATH = os.path.join("config", "memory_config.json")
 PROMPTS_PATH = os.path.join("config", "prompts.json")
@@ -24,8 +20,6 @@ load_dotenv()
 ollama_model = os.getenv("OLLAMA_MODEL")
 ollama_host = os.getenv("OLLAMA_HOST")
 telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-logging.info(f"[Ollama] Host: {ollama_host}")
-logging.info(f"[Ollama] Model: {ollama_model}")
 
 telegram = TelegramBot(telegram_bot_token)
 autopilot = AutoPilot(tick_every_seconds=30)
@@ -49,7 +43,8 @@ def load_known_chats():
                     out.add(int(s))
             return out
     except (OSError, ValueError, json.JSONDecodeError) as e:
-        logging.warning(f"Could not load known chats: {e}")
+        print(e)
+        traceback.print_exc()
     return set()
 
 def save_known_chats(chat_ids):
@@ -58,7 +53,8 @@ def save_known_chats(chat_ids):
         with open(CHAT_REGISTRY_PATH, "w", encoding="utf-8") as f:
             json.dump(sorted(list(chat_ids)), f, indent=2)
     except IOError as e:
-        logging.error(f"Could not save known chats: {e}")
+        print(e)
+        traceback.print_exc()
 
 def remember_chat(chat_id, known):
     if chat_id not in known:
@@ -79,12 +75,11 @@ def save_debug_log(chat_id, prompt_msgs):
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        logging.info(f"[Debug] Saved prompt log to {path}")
     except Exception as e:
-        logging.error(f"[Debug] Failed to save log: {e}")
+        print(e)
+        traceback.print_exc()
 
 def main():
-    logging.info("Main loop started...")
     known_chats = load_known_chats()
     for chat_id in list(known_chats):
         autopilot.register_chat(chat_id)
@@ -110,7 +105,8 @@ def main():
                 try:
                     telegram.send_chat_action(_chat_id, "typing")
                 except Exception as e:
-                    logging.warning(f"Failed to send typing action: {e}")
+                    print(e)
+                    traceback.print_exc()
                 stop.wait(4.5)
 
         t = threading.Thread(target=_loop, daemon=True)
@@ -236,7 +232,7 @@ def main():
             time.sleep(0.3)
 
         except Exception as e:
-            logging.critical(f"FATAL ERROR in main loop: {e}")
+            print(e)
             traceback.print_exc()
 
 main()

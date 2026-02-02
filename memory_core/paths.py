@@ -1,8 +1,5 @@
 import os
-import logging
 import traceback
-
-logger = logging.getLogger(__name__)
 
 class MemoryPaths:
     def __init__(self, root: str, chat_id: int):
@@ -24,8 +21,8 @@ class MemoryPaths:
             self.l0_dir = os.path.join(self.chat_dir, "l0")
             
         except Exception as e:
-            logger.error(f"Failed to initialize MemoryPaths: {e}")
-            logger.error(traceback.format_exc())
+            print(e)
+            traceback.print_exc()
             raise
 
     def ensure(self):
@@ -43,8 +40,8 @@ class MemoryPaths:
             for d in dirs_to_create:
                 os.makedirs(d, exist_ok=True)
         except OSError as e:
-            logger.error(f"Failed to create directory structure: {e}")
-            logger.error(traceback.format_exc())
+            print(e)
+            traceback.print_exc()
             raise
 
     def l0_active_path(self) -> str:

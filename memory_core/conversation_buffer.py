@@ -1,10 +1,7 @@
 import json
 import time
-import logging
 import traceback
 from .helpers import read_json, write_json
-
-logger = logging.getLogger(__name__)
 
 class ConversationBuffer:
     def __init__(self, active_path, archive_path):
@@ -15,8 +12,8 @@ class ConversationBuffer:
         try:
             return read_json(self.active_path) or []
         except Exception as e:
-            logger.error(f"Failed to read conversation buffer at {self.active_path}: {e}")
-            logger.error(traceback.format_exc())
+            print(e)
+            traceback.print_exc()
             return []
 
     def append(self, role: str, content: str, kind: str = ""):
@@ -31,8 +28,8 @@ class ConversationBuffer:
             current_data.append(item)
             write_json(self.active_path, current_data)
         except Exception as e:
-            logger.error(f"Failed to append to conversation buffer: {e}")
-            logger.error(traceback.format_exc())
+            print(e)
+            traceback.print_exc()
 
     def pop_oldest(self, count: int) -> list:
         try:
@@ -46,8 +43,8 @@ class ConversationBuffer:
             write_json(self.active_path, remaining)
             return to_pop
         except Exception as e:
-            logger.error(f"Failed to pop oldest from conversation buffer: {e}")
-            logger.error(traceback.format_exc())
+            print(e)
+            traceback.print_exc()
             return []
 
     def archive_many(self, items: list):
@@ -61,5 +58,5 @@ class ConversationBuffer:
             write_json(self.archive_path, archive_data)
 
         except (IOError, TypeError) as e:
-            logger.error(f"Failed to archive items to {self.archive_path}: {e}")
-            logger.error(traceback.format_exc())
+            print(e)
+            traceback.print_exc()
