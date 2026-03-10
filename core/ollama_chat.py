@@ -1,7 +1,10 @@
-import json, requests
+import json
+
+import requests
 
 class OllamaChatbot:
     """Chat wrapper for Ollama."""
+
     def __init__(self, model, host):
         self.model = model
         self.host = host
@@ -12,18 +15,18 @@ class OllamaChatbot:
     def stream_chat(self, messages, on_token=None):
         url = f"{self.host}/api/chat"
         payload = {"model": self.model, "messages": messages, "stream": True}
-        r = requests.post(url, json=payload, stream=True, timeout=180)
-        r.raise_for_status()
+        response = requests.post(url, json=payload, stream=True, timeout=180)
+        response.raise_for_status()
         full_text = ""
-        for line in r.iter_lines(decode_unicode=True):
-            if not line:
+        for raw_line in response.iter_lines(decode_unicode=True):
+            if not raw_line:
                 continue
             try:
-                chunk = json.loads(line)
+                chunk = json.loads(raw_line)
             except json.JSONDecodeError:
                 continue
-            msg = chunk.get("message") or {}
-            token = msg.get("content") or ""
+            message = chunk.get("message") or {}
+            token = message.get("content") or ""
             if token:
                 full_text += token
                 if on_token:
@@ -38,7 +41,7 @@ class OllamaChatbot:
         if stream_to_console:
             print("Assistant: ", end="", flush=True)
             assistant_text = self.stream_chat(
-                messages, on_token=lambda c: print(c, end="", flush=True)
+                messages, on_token=lambda token_chunk: print(token_chunk, end="", flush=True)
             )
             print()
         else:
@@ -47,8 +50,8 @@ class OllamaChatbot:
 
     def summarize_ask(self, user_text: str, stream_to_console: bool = True) -> str:
         """Custom message builder"""
-        with open("./user/system/system_prompt.txt", encoding="utf-8") as f:
-            system_prompt = f.read()
+        with open("./user/system/system_prompt.txt", encoding="utf-8") as prompt_file:
+            system_prompt = prompt_file.read()
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": (user_text or "")},
