@@ -1,20 +1,21 @@
-import chromadb
-import requests
-import json
 import logging
 import traceback
 from collections import Counter
 
+import chromadb
+import requests
+
 logger = logging.getLogger(__name__)
 
 class VectorManager:
-    def __init__(self, collection_name="memory_bullets", host="http://localhost:11434", model="embeddinggemma"):
+    def __init__(self, collection_name="memory_bullets", host="http://localhost:11434", model="embeddinggemma", request_timeout_s: float = 8.0):
         try:
             self.client = chromadb.PersistentClient(path="./chroma_db_new")
             self.collection_name = collection_name # Store collection name
             self.collection = self.client.get_or_create_collection(name=self.collection_name)
             self.host = host
             self.model = model
+            self.request_timeout_s = request_timeout_s
         except Exception as e:
             logger.error(f"Failed to initialize VectorManager: {e}")
             logger.error(traceback.format_exc())
@@ -24,7 +25,7 @@ class VectorManager:
         try:
             url = f"{self.host}/api/embeddings"
             payload = {"model": self.model, "prompt": f"{prefix}{text}"}
-            response = requests.post(url, json=payload)
+            response = requests.post(url, json=payload, timeout=self.request_timeout_s)
             response.raise_for_status()
             return response.json()["embedding"]
         except requests.exceptions.RequestException as e:
@@ -54,6 +55,14 @@ class VectorManager:
             ids = [f"{file_id}_{i}" for i in range(len(valid_embeddings))]
             metadatas = [{"source_file": file_id} for _ in valid_embeddings]
             
+            if len(valid_bullets) != len(valid_embeddings):
+                logger.warning(
+                    "Mismatch between valid bullets and embeddings for file %s (bullets=%s, embeddings=%s)",
+                    file_id,
+                    len(valid_bullets),
+                    len(valid_embeddings),
+                )
+
             self.collection.upsert(
                 ids=ids,
                 embeddings=valid_embeddings,

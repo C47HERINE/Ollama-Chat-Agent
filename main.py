@@ -3,14 +3,15 @@ import os
 import threading
 import time
 import traceback
+
 from dotenv import load_dotenv
+
+import core.timeutils as t
 from autopilot.autopilot import AutoPilot
 from core.ollama_chat import OllamaChatbot
 from core.telegram_bot import TelegramBot
 from core.voice_router import VoiceRouter
-import core.timeutils as t
-from memory_core.memory_manager import MemoryManager
-from memory_core.introspection import IntrospectionEngine
+from memory_core import MemoryCore
 
 CHAT_REGISTRY_PATH = os.path.join("user", "known_chats.json")
 MEM_CONFIG_PATH = os.path.join("config", "memory_config.json")
@@ -26,7 +27,7 @@ autopilot = AutoPilot(tick_every_seconds=30)
 ollama = OllamaChatbot(ollama_model, ollama_host)
 voice_prompt = os.getenv("VOICE_PROMPT_WAV")
 voice = VoiceRouter(audio_prompt_path=voice_prompt)
-introspection = IntrospectionEngine(t)
+memory_core = MemoryCore(root=".", config_path=MEM_CONFIG_PATH, prompts_path=PROMPTS_PATH, llm=ollama, time_utils=t)
 
 
 def load_known_chats():
@@ -52,7 +53,7 @@ def save_known_chats(chat_ids):
         os.makedirs(os.path.dirname(CHAT_REGISTRY_PATH), exist_ok=True)
         with open(CHAT_REGISTRY_PATH, "w", encoding="utf-8") as f:
             json.dump(sorted(list(chat_ids)), f, indent=2)
-    except IOError as e:
+    except OSError as e:
         print(e)
         traceback.print_exc()
 
@@ -84,18 +85,8 @@ def main():
     for chat_id in list(known_chats):
         autopilot.register_chat(chat_id)
 
-    memories = {}
-    def get_memory_manager(_chat_id: int):
-        _chat_id = int(_chat_id)
-        if _chat_id not in memories:
-            memories[_chat_id] = MemoryManager(
-                root=".",
-                chat_id=_chat_id,
-                llm=ollama,
-                config_path=MEM_CONFIG_PATH,
-                prompts_path=PROMPTS_PATH,
-            )
-        return memories[_chat_id]
+    def get_memory_manager(chat_id: int):
+        return memory_core.get_manager(chat_id)
 
     def ask_with_typing(_chat_id: int, msgs):
         stop = threading.Event()
@@ -134,9 +125,9 @@ def main():
         mm.after_assistant_sent()
 
     def introspection_fn(chat_id, state):
-        if introspection.should_introspect(state, silence_ms=3600_000):
+        if memory_core.introspection.should_introspect(state, silence_ms=3600_000):
             mm = get_memory_manager(chat_id)
-            prompt = introspection.build_block()
+            prompt = memory_core.introspection.build_block()
             msgs = mm.build_chat_messages(prompt)
             out = (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
             if out:
@@ -146,7 +137,7 @@ def main():
 
     while True:
         try:
-            for chat_id, text, first_name in telegram.get_updates():
+            for chat_id, text, _first_name in telegram.get_updates():
                 remember_chat(chat_id, known_chats)
                 autopilot.register_chat(chat_id)
                 memory_manager = get_memory_manager(chat_id)
@@ -171,7 +162,7 @@ def main():
                         continue
 
                     if command == "/start":
-                        reply = f"Hi! I'm online."
+                        reply = "Hi! I'm online."
                         telegram.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
                         memory_manager.after_assistant_sent()
@@ -213,7 +204,7 @@ def main():
                         continue
 
                 autopilot.observe_inbound(chat_id, text)
-                memory_manager.on_message(f"user", text, kind="inbound")
+                memory_manager.on_message("user", text, kind="inbound")
                 messages = memory_manager.build_chat_messages(text)
                 
                 st = autopilot.load_state(chat_id)

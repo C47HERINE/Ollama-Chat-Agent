@@ -3,36 +3,30 @@ import traceback
 
 logger = logging.getLogger(__name__)
 
+
 class CompactionPlanner:
-    def __init__(self, max_level_files: int, l0_max_msgs: int):
-        try:
-            self.max_level_files = max_level_files
-            self.l0_max_msgs = l0_max_msgs
-        except Exception as e:
-            logger.error(f"Failed to initialize CompactionPlanner: {e}")
-            logger.error(traceback.format_exc())
-            raise
+    """Plan background memory compaction jobs based on active L0 message count."""
+
+    def __init__(self, l0_max_messages: int):
+        self.l0_max_messages = int(l0_max_messages)
 
     def plan(self, state: dict, l0_count: int) -> dict:
+        """Ensure the compaction queue contains a single L0->L1 job when threshold is reached."""
         try:
             if not isinstance(state, dict):
                 logger.error("CompactionPlanner received invalid state (not a dict).")
                 return {}
 
-            if "jobs" not in state:
-                state["jobs"] = []
+            jobs = state.setdefault("jobs", [])
+            if l0_count < self.l0_max_messages:
+                return state
 
-            # Plan L0 -> L1 compaction
-            if l0_count >= self.l0_max_msgs:
-                # Check if a compaction job for L0 is already queued
-                is_queued = any(job.get("type") == "COMPACT_L0_TO_L1" for job in state["jobs"])
-                if not is_queued:
-                    logger.info("Planning L0->L1 compaction job.")
-                    state["jobs"].append({"type": "COMPACT_L0_TO_L1", "payload": {}})
-            
+            already_queued = any(job.get("type") == "COMPACT_L0_TO_L1" for job in jobs)
+            if not already_queued:
+                logger.info("Planning L0->L1 compaction job.")
+                jobs.append({"type": "COMPACT_L0_TO_L1", "payload": {}})
             return state
-        except Exception as e:
-            logger.error(f"An error occurred during compaction planning: {e}")
+        except Exception as error:
+            logger.error(f"An error occurred during compaction planning: {error}")
             logger.error(traceback.format_exc())
-            # Return the original state to avoid data loss
             return state if isinstance(state, dict) else {}

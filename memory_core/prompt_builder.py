@@ -1,9 +1,15 @@
+import importlib
 import json
 import os
-import tiktoken
 import traceback
-from .helpers import read_text, write_text
-from core import weather
+
+from .helpers import read_text
+
+
+class _NoopWeatherInjector:
+    def weather_updater(self):
+        return ""
+
 
 class PromptBuilder:
     def __init__(self, paths, vector_manager, config, model_encoding="cl100k_base"):
@@ -11,8 +17,17 @@ class PromptBuilder:
             self.paths = paths
             self.vm = vector_manager
             self.config = config
-            self.encoding = tiktoken.get_encoding(model_encoding)
-            self.weather_injector = weather.WeatherInjector()
+            self.encoding = None
+            if importlib.util.find_spec("tiktoken") is not None:
+                tiktoken = importlib.import_module("tiktoken")
+                self.encoding = tiktoken.get_encoding(model_encoding)
+            self.weather_injector = _NoopWeatherInjector()
+            if importlib.util.find_spec("core.weather") is not None:
+                try:
+                    weather = importlib.import_module("core.weather")
+                    self.weather_injector = weather.WeatherInjector()
+                except Exception:
+                    self.weather_injector = _NoopWeatherInjector()
             
             retrieval_conf = self.config.get("retrieval", {})
             self.max_context = int(retrieval_conf.get("max_context_tokens", 32000))
@@ -28,6 +43,8 @@ class PromptBuilder:
 
     def _count_tokens(self, text):
         try:
+            if self.encoding is None:
+                return len(text) // 4
             return len(self.encoding.encode(text))
         except Exception as e:
             print(e)
@@ -38,9 +55,9 @@ class PromptBuilder:
         try:
             if not os.path.exists(path):
                 return {}
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, encoding='utf-8') as f:
                 return json.load(f)
-        except (IOError, json.JSONDecodeError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             print(e)
             traceback.print_exc()
             return {}
@@ -57,10 +74,10 @@ class PromptBuilder:
                 if p in exclude_files:
                     continue
                 if os.path.isfile(p) and name.lower().endswith((".md", ".txt")):
-                    with open(p, 'r', encoding='utf-8') as f:
+                    with open(p, encoding='utf-8') as f:
                         parts.append(f.read())
             return "\n\n".join(parts)
-        except IOError as e:
+        except OSError as e:
             print(e)
             traceback.print_exc()
             return ""
@@ -121,9 +138,13 @@ class PromptBuilder:
 
             # Vector Search
             relevant_ids = self.vm.search_and_vote(user_input, top_n_files=self.archived_count)
+            seen_ids = set()
             archived_text = "## ARCHIVED MEMORIES\n"
             active_core_principles = []
             for rid in relevant_ids:
+                if rid in seen_ids:
+                    continue
+                seen_ids.add(rid)
                 fpath = os.path.join(self.paths.l1_dir, f"{rid}.json")
                 l1 = self._load_json(fpath)
                 if l1:
@@ -134,6 +155,10 @@ class PromptBuilder:
             l1_files = sorted([f for f in os.listdir(self.paths.l1_dir) if f.endswith(".json")])
             recent_text = "## RECENT MEMORIES\n"
             for fname in l1_files[-self.recent_count:]:
+                l1_id = fname[:-5]
+                if l1_id in seen_ids:
+                    continue
+                seen_ids.add(l1_id)
                 fpath = os.path.join(self.paths.l1_dir, fname)
                 l1 = self._load_json(fpath)
                 if l1:
@@ -142,7 +167,8 @@ class PromptBuilder:
 
             # Weather
             weather_text = self.weather_injector.weather_updater() or ""
-            if weather_text: weather_text = f"## LOW PRIORITY INFO\n{weather_text}\n"
+            if weather_text:
+                weather_text = f"## LOW PRIORITY INFO\n{weather_text}\n"
 
             # Core Principles
             active_core_principles.extend(l4_data.get("core_principles", []))
@@ -155,12 +181,14 @@ class PromptBuilder:
             # Assemble and Truncate
             must_have = f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{persona_anchor}\n\n{chat_text}"
             must_have_tokens = self._count_tokens(must_have)
-            remaining_tokens = self.effective_limit - must_have_tokens
-            
+            remaining_tokens = max(0, self.effective_limit - must_have_tokens)
+
             optional_context = f"{archived_text}\n\n{recent_text}\n\n{weather_text}"
-            if self._count_tokens(optional_context) > remaining_tokens:
-                ratio = remaining_tokens / self._count_tokens(optional_context) if self._count_tokens(optional_context) > 0 else 0
-                optional_context = optional_context[:int(len(optional_context) * ratio)] + "... [TRUNCATED]"
+            optional_tokens = self._count_tokens(optional_context)
+            if optional_tokens > remaining_tokens:
+                ratio = (remaining_tokens / optional_tokens) if optional_tokens > 0 else 0
+                truncate_at = max(0, int(len(optional_context) * ratio))
+                optional_context = optional_context[:truncate_at] + "... [TRUNCATED]"
                 
             return f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{optional_context}\n\n{persona_anchor}\n\n{chat_text}"
 
