@@ -44,54 +44,40 @@ Raw logs are the source of truth for all higher-level memory.
 
 ---
 
-### 🧩 Hierarchical Memory Compaction
+### 🧩 Memory Compaction Pipeline (Current)
 
-To prevent unbounded context growth while preserving semantic continuity, the agent uses LLM-driven hierarchical summarization.
+To prevent unbounded context growth while preserving continuity, the current system uses a serialized L0 → L1 compaction pipeline with a continuously updated master record.
 
-Memory levels:
+Memory levels in use today:
 
-- Level 0 (Raw)  
-  Unlimited raw messages on disk
+- Level 0 (Raw active + archive)  
+  - New messages are appended to `l0/active.json`  
+  - Compacted chunks are moved into `l0/archive.json`
 
-- Level 1 (L1)  
-  - Every 60 messages  
-  - Last 30 summarized  
-  - Strict length cap
-
-- Level 2 (L2)  
-  - Triggered at 3 L1 files  
-  - Last 2 L1 files summarized
-
-- Level 3 (L3)  
-  - Triggered at 3 L2 files  
-  - Last 2 L2 files summarized
+- Level 1 (L1 summaries)  
+  - Triggered when L0 active reaches configured threshold (`config/memory_config.json`)  
+  - A configured chunk is summarized into one immutable L1 JSON file
 
 - Master Memory  
-  - Triggered at 3 L3 files  
-  - Existing master + last 2 L3 files summarized together  
-  - Produces a new master file (compression, not appending)
+  - Updated after each successful L1 write  
+  - Acts as a compressed, rolling long-horizon profile
 
-All summaries are immutable once written.  
-No memory file is ever deleted or overwritten.
-
-Compaction is executed as a serialized background process.  
-Only one compaction task runs at a time; additional tasks are queued and prioritized via a persistent state file to prevent concurrent writes and runaway processing.
+Compaction runs as queued background jobs with serialized execution so only one memory job runs at a time.
 
 ---
 
 ### 🧠 Context Injection (Strictly Bounded)
 
-At inference time, the agent injects at most:
+At inference time, prompt assembly is built from:
 
-- ≤ 60 recent raw messages  
-- ≤ 3 L1 summaries  
-- ≤ 3 L2 summaries  
-- ≤ 3 L3 summaries  
-- ≤ 1 master memory  
+- System/user context files
+- Master memory snapshot
+- Embedding-retrieved L1 summaries (semantic recall)
+- Recent L1 summaries (recency recall)
+- Recent active chat history (latest turns)
+- Optional low-priority environment context (weather)
 
-Each tier has its own length cap.
-
-Context is rebuilt only when memory changes (for example, during compaction), minimizing disk I/O, recomputation, and unnecessary inference overhead.
+The retrieval block is token-budgeted with safety buffers and truncation safeguards, and duplicated L1 entries are removed when the same memory appears in both semantic and recent slices.
 
 ---
 
@@ -140,12 +126,18 @@ All autonomous actions are logged internally for traceability.
 
 Clear separation of responsibilities:
 
-- core/ — Telegram I/O, Ollama calls, TTS routing, environment data retrieval  
-- memory_core/ — Logs, memory compaction, summarization, context building, state tracking  
-- autopilot/ — Scheduling, policies, cooldowns, autonomous behavior  
-- config/ — Declarative configuration and prompt templates  
+- `core/` — Telegram I/O, Ollama calls, TTS routing, environment retrieval  
+- `memory_core/` — Memory orchestration, compaction jobs, summarization, retrieval, prompt building  
+- `autopilot/` — Scheduling, policies, cooldowns, autonomous behavior  
+- `config/` — Declarative configuration and prompt templates  
 
-The system is designed so that operational concerns (memory safety, serialization, error handling) are enforced by structure rather than convention.
+The memory subsystem is now exposed through a single package entry point, `MemoryCore` (`memory_core/__init__.py`):
+
+- `main.py` instantiates `MemoryCore` once
+- `MemoryCore` lazily creates and caches one `MemoryManager` per chat
+- Introspection is also provided through the same facade
+
+This keeps memory wiring centralized and reduces orchestration logic in the app entrypoint.
 
 ---
 
