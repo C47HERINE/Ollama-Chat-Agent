@@ -1,6 +1,23 @@
+# --- Index for CUDA 13.0 Wheels ---
+--extra-index-url https://download.pytorch.org/whl/cu130
+
+# --- Core ML Stack (CUDA 13.0) ---
+# PyTorch 2.10 adds native support for CUDA 13.0 and Blackwell architectures
+torch==2.10.0+cu130
+torchvision==0.25.0+cu130
+torchaudio==2.10.0+cu130
+
+# --- Transformer Stack ---
+#transformers>=4.57.6
+#bitsandbytes>=0.49.1
+#accelerate>=1.12.0
+#safetensors>=0.7.0
+
+# --- Utilities & Data ---
 requests~=2.32.5
-dotenv~=0.9.9
 python-dotenv~=1.2.1
 numpy~=1.25.2
-torch~=2.7.1+cu128
-python-telegram-bot
+chromadb
+tiktoken
+huggingface-hub~=0.36.1
+transformers

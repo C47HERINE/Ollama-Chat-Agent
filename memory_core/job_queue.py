@@ -1,27 +1,47 @@
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
+
 class JobQueue:
-    """
-    Manage a persistent list of jobs with priority order.
-    """
+    def __init__(self, jobs: list):
+        try:
+            if not isinstance(jobs, list):
+                raise TypeError("Jobs must be a list.")
+            self.jobs = jobs
+        except Exception as e:
+            logger.error(f"Failed to initialize JobQueue: {e}")
+            logger.error(traceback.format_exc())
+            self.jobs = []
 
-    PRIORITY = {
-        "COMPACT_L3_TO_L4": 1,
-        "COMPACT_L2_TO_L3": 2,
-        "COMPACT_L1_TO_L2": 3,
-        "COMPACT_L0_TO_L1": 4,
-    }
+    def enqueue(self, job_type: str, payload: dict):
+        try:
+            job = {"type": job_type, "payload": payload}
+            self.jobs.append(job)
+        except Exception as e:
+            logger.error(f"Failed to enqueue job: {e}")
+            logger.error(traceback.format_exc())
 
-    def __init__(self, jobs_list: list):
-        self.jobs = jobs_list if isinstance(jobs_list, list) else []
-
-    def has(self, job_type: str) -> bool:
-        return any(j.get("type") == job_type for j in self.jobs)
-
-    def enqueue_once(self, job_type: str) -> None:
-        if not self.has(job_type):
-            self.jobs.append({"type": job_type})
+    def enqueue_once(self, job_type: str, payload: dict):
+        try:
+            # Avoid duplicate jobs
+            for job in self.jobs:
+                if job.get("type") == job_type and job.get("payload") == payload:
+                    return
+            self.enqueue(job_type, payload)
+        except Exception as e:
+            logger.error(f"Failed to enqueue_once job: {e}")
+            logger.error(traceback.format_exc())
 
     def pop_next(self):
-        if not self.jobs:
+        try:
+            if not self.jobs:
+                return None
+            return self.jobs.pop(0)
+        except Exception as e:
+            logger.error(f"Failed to pop next job: {e}")
+            logger.error(traceback.format_exc())
             return None
-        self.jobs.sort(key=lambda j: self.PRIORITY.get(j.get("type", ""), 999))
-        return self.jobs.pop(0)
+
+    def is_empty(self) -> bool:
+        return not self.jobs

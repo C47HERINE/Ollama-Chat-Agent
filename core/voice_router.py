@@ -1,6 +1,5 @@
 import os, re, wave, torch
 import threading
-
 import numpy as np
 # from chatterbox.tts import ChatterboxTTS
 
@@ -12,13 +11,14 @@ class VoiceRouter:
         self.voice_command = "/voice"
         self.cfg_weight = 0.5
         self.exaggeration = 0.5
-        self.temperature = 0.9
+        self.temperature = 0.8
         self.threshold_chars = 400
-        self.batch_target_chars = 250
-        self.batch_max_chars = 500
+        self.batch_target_chars = 300
+        self.batch_max_chars = 600
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         # self.model = ChatterboxTTS.from_pretrained(device=self.device)
         self.model = None
+        self.telegram_char_limit = 4096
 
     def remove_emojis(self, text: str) -> str:
         if not text:
@@ -247,6 +247,10 @@ class VoiceRouter:
 
     def send(self, tg, chat_id: int, assistant_text: str):
         raw_text = assistant_text or ""
+
+        # Truncate message if it exceeds Telegram's character limit
+        if len(raw_text) > self.telegram_char_limit:
+            raw_text = raw_text[:self.telegram_char_limit - 3] + "..."
 
         prefix, voice_part = self.find_voice_split(raw_text)
 

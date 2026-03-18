@@ -1,139 +1,125 @@
 import os
+import json
+import time
+import traceback
+import logging
+from .helpers import render_chat_as_text, write_text, read_json, write_json
+from .job_queue import JobQueue
 
-from memory_core.helpers import read_text, render_chat_as_text, write_text
-from memory_core.job_queue import JobQueue
-from memory_core.recap_store import RecapStore
-
+logger = logging.getLogger(__name__)
 
 class CompactionRunner:
-    """
-    Run EXACTLY ONE job (highest priority) per call.
-    Designed to be called AFTER assistant sends.
-    """
-
-    def __init__(self, paths, state_store, conversation_buffer, summarizer, l0_summary_msgs: int):
+    def __init__(self, paths, state_store, conversation_buffer, summarizer, vector_manager, l0_summary_msgs: int):
         self.paths = paths
         self.state_store = state_store
         self.conversation = conversation_buffer
         self.summarizer = summarizer
+        self.vector_manager = vector_manager
         self.l0_summary_msgs = int(l0_summary_msgs)
 
-    def _load_master(self) -> str:
-        if not os.path.exists(self.paths.master_path()):
-            return ""
-        else:
-            return read_text(self.paths.master_path())
-
-    def _save_master(self, text: str) -> None:
-        write_text(self.paths.master_path(), (text or ""))
-
-    def _level_store(self, level: int) -> RecapStore:
-        if level == 1:
-            return RecapStore(self.paths.l1_dir)
-        if level == 2:
-            return RecapStore(self.paths.l2_dir)
-        if level == 3:
-            return RecapStore(self.paths.l3_dir)
-        raise ValueError("level must be 1..3")
-
     def run_one(self) -> bool:
-        state = self.state_store.load()
-        queue = JobQueue(state.get("jobs", []))
-        job = queue.pop_next()
+        try:
+            state = self.state_store.load()
+            queue = JobQueue(state.get("jobs", []))
+            job = queue.pop_next()
 
-        if not job:
-            state["jobs"] = queue.jobs
-            self.state_store.save(state)
-            return False
-
-        job_type = job.get("type", "")
-
-        if job_type == "COMPACT_L0_TO_L1" and len(state["l1_active"]) >= 3:
-            queue.enqueue_once("COMPACT_L1_TO_L2")
-            queue.jobs.append(job)
-            state["jobs"] = queue.jobs
-            self.state_store.save(state)
-            return False
-
-        if job_type == "COMPACT_L1_TO_L2" and len(state["l2_active"]) >= 3:
-            queue.enqueue_once("COMPACT_L2_TO_L3")
-            queue.jobs.append(job)
-            state["jobs"] = queue.jobs
-            self.state_store.save(state)
-            return False
-
-        if job_type == "COMPACT_L2_TO_L3" and len(state["l3_active"]) >= 3:
-            queue.enqueue_once("COMPACT_L3_TO_L4")
-            queue.jobs.append(job)
-            state["jobs"] = queue.jobs
-            self.state_store.save(state)
-            return False
-
-        if job_type == "COMPACT_L3_TO_L4":
-            if len(state["l3_active"]) < 2:
-                state["jobs"] = queue.jobs
-                self.state_store.save(state)
+            if not job:
                 return False
 
-            a, b = state["l3_active"][0], state["l3_active"][1]
-            l3_store = self._level_store(3)
-            a_txt, b_txt = l3_store.read(a), l3_store.read(b)
+            logger.info(f"Executing job: {job.get('type')}")
+            job_type = job.get("type", "")
 
-            master = self._load_master()
-            master_new = self.summarizer.l3_to_l4_master(master, a_txt, b_txt)
-            self._save_master(master_new)
-            state["l3_active"] = state["l3_active"][2:]
+            if job_type == "COMPACT_L0_TO_L1":
+                self._run_l0_compaction(job, queue)
+            elif job_type == "UPDATE_MASTER":
+                self._run_master_update(job)
 
-        elif job_type == "COMPACT_L2_TO_L3":
-            if len(state["l2_active"]) < 2:
-                state["jobs"] = queue.jobs
-                self.state_store.save(state)
-                return False
+            state["jobs"] = queue.jobs
+            self.state_store.save(state)
+            return True
+        except Exception as e:
+            logger.error(f"An unexpected error occurred in CompactionRunner.run_one: {e}")
+            logger.error(traceback.format_exc())
+            return False
 
-            a, b = state["l2_active"][0], state["l2_active"][1]
-            l2_store = self._level_store(2)
-            a_txt, b_txt = l2_store.read(a), l2_store.read(b)
+    def _run_l0_compaction(self, job, queue):
+        chunk = self.conversation.pop_oldest(self.l0_summary_msgs)
+        if not chunk:
+            logger.warning("L0 compaction job failed: No messages to compact.")
+            return
 
-            merged = self.summarizer.merge_two(a_txt, b_txt)
-            l3_store = self._level_store(3)
-            out = l3_store.write_new("l3", merged)
+        self.conversation.archive_many(chunk)
+        chunk_txt = render_chat_as_text(chunk)
 
-            state["l2_active"] = state["l2_active"][2:]
-            state["l3_active"].append(out)
+        try:
+            l1_data = self.summarizer.l0_to_l1(chunk_txt)
+            if not l1_data or (not l1_data.get("diary") and not l1_data.get("bullets")):
+                logger.warning("Summarizer returned empty data. Saving failed chunk.")
+                self._save_failed_chunk(chunk_txt)
+                return
 
-        elif job_type == "COMPACT_L1_TO_L2":
-            if len(state["l1_active"]) < 2:
-                state["jobs"] = queue.jobs
-                self.state_store.save(state)
-                return False
+            l1_id = f"l1_{int(time.time())}"
+            l1_data["id"] = l1_id
+            l1_data["timestamp"] = str(time.time())
+            
+            path = os.path.join(self.paths.l1_dir, f"{l1_id}.json")
+            write_json(path, l1_data, indent=4)
+            
+            state = self.state_store.load()
+            if "l1_active" not in state: state["l1_active"] = []
+            state["l1_active"].append(l1_id)
+            self.state_store.save(state)
+            
+            logger.info(f"Summarization successful for {l1_id}")
+            
+            bullets = l1_data.get("bullets", [])
+            if bullets:
+                self.vector_manager.add_to_index(bullets, l1_id)
 
-            a, b = state["l1_active"][0], state["l1_active"][1]
-            l1_store = self._level_store(1)
-            a_txt, b_txt = l1_store.read(a), l1_store.read(b)
+            queue.enqueue_once("UPDATE_MASTER", {"l1_id": l1_id})
 
-            merged = self.summarizer.merge_two(a_txt, b_txt)
-            l2_store = self._level_store(2)
-            out = l2_store.write_new("l2", merged)
+        except Exception as e:
+            logger.error(f"Failed during L0 compaction: {e}")
+            logger.error(traceback.format_exc())
+            self._save_failed_chunk(chunk_txt)
 
-            state["l1_active"] = state["l1_active"][2:]
-            state["l2_active"].append(out)
+    def _run_master_update(self, job):
+        l1_id = job.get("payload", {}).get("l1_id")
+        if not l1_id:
+            logger.warning("UPDATE_MASTER failed: No l1_id provided.")
+            return
 
-        elif job_type == "COMPACT_L0_TO_L1":
-            chunk = self.conversation.pop_oldest(self.l0_summary_msgs)
-            if not chunk:
-                state["jobs"] = queue.jobs
-                self.state_store.save(state)
-                return False
+        try:
+            l1_path = os.path.join(self.paths.l1_dir, f"{l1_id}.json")
+            master_path = self.paths.master_path()
+            
+            l1_data = read_json(l1_path)
+            master_data = read_json(master_path) or {}
+            
+            if not l1_data:
+                logger.warning(f"UPDATE_MASTER failed: Could not read {l1_id}.")
+                return
 
-            self.conversation.archive_many(chunk)
-            chunk_txt = render_chat_as_text(chunk)
+            logger.info(f"Updating Master Record with {l1_id}...")
+            diary = l1_data.get("diary", "")
+            rules_locked = l1_data.get("rules_locked", [])
+            
+            new_master = self.summarizer.update_master(master_data, diary, rules_locked)
+            if new_master:
+                new_master["last_updated"] = str(time.time())
+                write_json(master_path, new_master, indent=4)
+                logger.info("Master Record updated.")
+            else:
+                logger.warning("Master Update failed: LLM returned empty.")
+        except Exception as e:
+            logger.error(f"Failed during master update for L1 ID {l1_id}: {e}")
+            logger.error(traceback.format_exc())
 
-            recap = self.summarizer.l0_to_l1(chunk_txt)
-            l1_store = self._level_store(1)
-            out = l1_store.write_new("l1", recap)
-
-            state["l1_active"].append(out)
-
-        state["jobs"] = queue.jobs
-        self.state_store.save(state)
-        return True
+    def _save_failed_chunk(self, chunk_text):
+        try:
+            failed_path = os.path.join(self.paths.l1_dir, f"failed_chunk_{int(time.time())}.txt")
+            write_text(failed_path, chunk_text)
+            logger.info(f"Saved failed chunk to {failed_path}")
+        except Exception as e:
+            logger.error(f"Could not save failed chunk: {e}")
+            logger.error(traceback.format_exc())
