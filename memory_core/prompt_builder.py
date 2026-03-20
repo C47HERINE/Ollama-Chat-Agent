@@ -2,16 +2,16 @@ import json
 import os
 import tiktoken
 import traceback
-from .helpers import read_text, read_json
+from .helpers import read_text
 from core import weather
 
 
 class PromptBuilder:
-    def __init__(self, paths, vector_manager, config, model_encoding="cl100k_base"):
+    def __init__(self, paths, vector_manager, config):
         self.paths = paths
         self.vm = vector_manager
         self.config = config
-        self.encoding = tiktoken.get_encoding(model_encoding)
+        self.encoding = tiktoken.get_encoding("cl100k_base")
         self.weather_injector = weather.WeatherInjector()
         retrieval_conf = self.config.get("retrieval", {})
         self.max_context = int(retrieval_conf.get("max_context_tokens", 32000))

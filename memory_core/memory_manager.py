@@ -11,7 +11,7 @@ from .prompt_builder import PromptBuilder
 
 
 class MemoryManager:
-    def __init__(self, root: str, chat_id: int, config_path: str, prompts_path: str, llm):
+    def __init__(self, root: str, chat_id: int, config_path: str, llm):
         self.paths = MemoryPaths(root=root, chat_id=chat_id)
 
         self.paths.ensure()
@@ -26,7 +26,7 @@ class MemoryManager:
         system_prompt_path = os.path.join(self.paths.system_dir, "system_prompt.txt")
         system_prompt = read_text(system_prompt_path) or ""
 
-        self.prompt_builder = PromptBuilder(prompts_path, self.paths, self.vector_manager, self.config)
+        self.prompt_builder = PromptBuilder(self.paths, self.vector_manager, self.config)
 
         self.summarizer = Summarizer(prompt_lib=self.prompt_builder, llm=llm, system_prompt=system_prompt)
 
@@ -44,7 +44,7 @@ class MemoryManager:
 
     def build_chat_messages(self, user_text: str) -> list[dict]:
         try:
-            l0_items = read_all(self.paths.l0_active_path) or []
+            l0_items = read_all(self.paths.l0_active_path()) or []
             prompt_str = self.prompt_builder.build_prompt(user_text, l0_items)
             return [{"role": "user", "content": prompt_str}]
         except Exception as e:
@@ -54,8 +54,8 @@ class MemoryManager:
 
 
     def on_message(self, role: str, content: str, kind: str = ""):
-        append(role=role, content=content, kind=kind, active_path=self.paths.l0_active_path)
-        l0_items = read_all(self.paths.l0_active_path)
+        append(role=role, content=content, kind=kind, active_path=self.paths.l0_active_path())
+        l0_items = read_all(self.paths.l0_active_path())
         state = self.state_store.load()
         state = self.compactor.plan(state, len(l0_items))
         self.state_store.save(state)

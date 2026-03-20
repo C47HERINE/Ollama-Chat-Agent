@@ -256,7 +256,6 @@ class VoiceRouter:
         prefix, voice_part = self.find_voice_split(raw_text)
 
         def action_loop(action: str, stop_event, interval_s: float = 4.5):
-            # local helper; NOT added to TelegramBot, no duplicates
             while not stop_event.is_set():
                 try:
                     tg.send_chat_action(chat_id, action)

@@ -59,16 +59,6 @@ def remember_chat(chat_id, known):
         save_known_chats(known)
 
 
-def save_debug_log(chat_id, prompt_msgs):
-    debug_dir = os.path.join("user", "chats", str(chat_id), "debug")
-    os.makedirs(debug_dir, exist_ok=True)
-    filename = f"prompt_log_{int(time.time())}.json"
-    path = os.path.join(debug_dir, filename)
-    data = {"timestamp": t.now_ms(), "prompt_messages": prompt_msgs}
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
 def main():
     known_chats = load_known_chats()
     for chat_id in list(known_chats):
@@ -78,13 +68,7 @@ def main():
     def get_memory_manager(_chat_id: int):
         _chat_id = int(_chat_id)
         if _chat_id not in memories:
-            memories[_chat_id] = MemoryManager(
-                root=".",
-                chat_id=_chat_id,
-                llm=ollama,
-                config_path=MEM_CONFIG_PATH,
-                prompts_path=PROMPTS_PATH,
-            )
+            memories[_chat_id] = MemoryManager(root=".", chat_id=_chat_id, llm=ollama, config_path=MEM_CONFIG_PATH)
         return memories[_chat_id]
 
 
@@ -107,9 +91,6 @@ def main():
     def generate_fn(chat_id, prompt_text):
         mm = get_memory_manager(chat_id)
         msgs = mm.build_chat_messages(prompt_text)
-        state = autopilot.load_state(chat_id)
-        if state.get("debug_mode", False):
-            save_debug_log(chat_id, msgs)
         return ask_with_typing(chat_id, msgs)
 
 
@@ -206,22 +187,12 @@ def main():
                         memory_manager.after_assistant_sent()
                         continue
 
-                    if command == "/debug":
-                        st = autopilot.load_state(chat_id)
-                        new_mode = not st.get("debug_mode", False)
-                        st["debug_mode"] = new_mode
-                        autopilot.save_state(chat_id, st)
-                        reply = f"Debug mode: {'ON' if new_mode else 'OFF'}"
-                        telegram.send_message(chat_id, reply)
-                        continue
 
                 autopilot.observe_inbound(chat_id, text)
                 memory_manager.on_message(f"user", text, kind="inbound")
                 messages = memory_manager.build_chat_messages(text)
 
                 st = autopilot.load_state(chat_id)
-                if st.get("debug_mode", False):
-                    save_debug_log(chat_id, messages)
 
                 reply = ask_with_typing(chat_id, messages)
                 if reply:

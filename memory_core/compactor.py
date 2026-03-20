@@ -21,8 +21,8 @@ class MemoryCompactor:
         self.max_level_files = max_level_files
         self.l0_max_msgs = l0_max_msgs
         self.jobs = []
-        self.active_path = self.paths.active_path
-        self.archive_path = self.paths.archive_path
+        self.active_path = self.paths.l0_active_path()
+        self.archive_path = self.paths.l0_archive_path
 
 
     def pop_oldest(self, count: int) -> list:
