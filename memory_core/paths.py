@@ -6,17 +6,11 @@ class MemoryPaths:
     def __init__(self, root: str, chat_id: int):
         self.root = root
         self.chat_id = str(chat_id)
-
-        # Base directories
         self.chat_dir = os.path.join(self.root, "user", "chats", self.chat_id)
         self.system_dir = os.path.join(self.root, "user", "system")
         self.user_context_dir = os.path.join(self.chat_dir, "context") # Per-chat context
-
-        # State and Master directories
         self.state_dir = os.path.join(self.chat_dir, "state")
         self.master_dir = os.path.join(self.chat_dir, "master")
-
-        # Memory directories
         self.l1_dir = os.path.join(self.chat_dir, "l1")
         self.l0_dir = os.path.join(self.chat_dir, "l0")
 
