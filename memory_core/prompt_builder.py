@@ -104,10 +104,15 @@ class PromptBuilder:
     def build_prompt(self, user_input, active_chat_history):
         try:
             system_prompt = self._read_folder(self.paths.system_dir)
+
             personal_context_path = self.paths.personal_context_path()
             personal_context = read_text(personal_context_path) or ""
-            other_user_context = self._read_folder(self.paths.user_context_dir, exclude_files=[personal_context_path])
+            other_user_context = self._read_folder(
+                self.paths.user_context_dir,
+                exclude_files=[personal_context_path]
+            )
             user_context_raw = f"{personal_context}\n\n{other_user_context}".strip()
+
             user_context_block = ""
             if user_context_raw:
                 user_context_block = (
@@ -122,9 +127,33 @@ class PromptBuilder:
             l4_data = self._load_json(self.paths.master_path())
             master_text = self._flatten_l4(l4_data)
 
-            relevant_ids = self.vm.search_and_vote(user_input, top_n_files=self.archived_count)
+            # Build retrieval query from the last 5 L0 messages + current user input.
+            window = (active_chat_history or [])[-5:]
+            retrieval_query = "\n".join(
+                f"{m.get('role', 'user')}: {m.get('content', '')}"
+                for m in window
+                if m.get("content")
+            )
+
+            if retrieval_query:
+                retrieval_query += f"\nuser: {user_input}"
+            else:
+                retrieval_query = user_input
+
+            print("=== RETRIEVAL QUERY ===")
+            print(retrieval_query)
+
+            relevant_ids = self.vm.search_and_vote(
+                retrieval_query,
+                top_n_files=self.archived_count
+            )
+
+            print("=== RELEVANT IDS ===")
+            print(relevant_ids)
+
             archived_text = "## ARCHIVED MEMORIES\n"
             active_core_principles = []
+
             for rid in relevant_ids:
                 path = os.path.join(self.paths.l1_dir, f"{rid}.json")
                 l1 = self._load_json(path)
@@ -132,9 +161,15 @@ class PromptBuilder:
                     archived_text += self._flatten_l1(l1) + "\n"
                     active_core_principles.extend(l1.get("core_principles", []))
 
+            print("=== ARCHIVED TEXT ===")
+            print(archived_text)
+
             l1_files = []
             if os.path.isdir(self.paths.l1_dir):
-                l1_files = sorted([f for f in os.listdir(self.paths.l1_dir) if f.endswith(".json")])
+                l1_files = sorted(
+                    [f for f in os.listdir(self.paths.l1_dir) if f.endswith(".json")]
+                )
+
             recent_text = "## RECENT MEMORIES\n"
             for file in l1_files[-self.recent_count:]:
                 path = os.path.join(self.paths.l1_dir, file)
@@ -158,18 +193,42 @@ class PromptBuilder:
                 for msg in chat_history_slice
             )
 
-            must_have = f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{persona_anchor}\n\n{chat_text}"
+            must_have = (
+                f"{system_prompt}\n\n"
+                f"{user_context_block}\n\n"
+                f"{master_text}\n\n"
+                f"{persona_anchor}\n\n"
+                f"{chat_text}"
+            )
+
             must_have_tokens = self._count_tokens(must_have)
             remaining_tokens = self.effective_limit - must_have_tokens
+
             optional_context = f"{archived_text}\n\n{recent_text}\n\n{weather_text}"
             optional_tokens = self._count_tokens(optional_context)
-            if remaining_tokens > 0 and optional_tokens > remaining_tokens:
+
+            if 0 < remaining_tokens < optional_tokens:
                 ratio = remaining_tokens / optional_tokens
                 optional_context = optional_context[: int(len(optional_context) * ratio)] + "... [TRUNCATED]"
             elif remaining_tokens <= 0:
                 optional_context = ""
 
-            return f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{optional_context}\n\n{persona_anchor}\n\n{chat_text}"
+            print("must_have_tokens:", must_have_tokens)
+            print("remaining_tokens:", remaining_tokens)
+            print("optional_tokens:", optional_tokens)
+            print("archived_len:", len(archived_text))
+            print("recent_len:", len(recent_text))
+            print("final_optional_context:\n", optional_context)
+
+            return (
+                f"{system_prompt}\n\n"
+                f"{user_context_block}\n\n"
+                f"{master_text}\n\n"
+                f"{optional_context}\n\n"
+                f"{persona_anchor}\n\n"
+                f"{chat_text}"
+            )
+
         except Exception as e:
             print(e)
             traceback.print_exc()
