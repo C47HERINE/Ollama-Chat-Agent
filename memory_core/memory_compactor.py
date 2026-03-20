@@ -43,7 +43,6 @@ class MemoryCompactor:
         self.jobs.append({"type": job_type, "payload": payload})
 
 
-
     def plan(self, state: dict, l0_message_count) -> dict:
         try:
             if not isinstance(state, dict):
