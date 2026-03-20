@@ -22,6 +22,8 @@ class TelegramBot:
             results = response.json().get("result") or []
             for update in results:
                 update_id = update.get("update_id")
+                if update_id is not None:
+                    self.offset = update_id + 1
                 msg = update.get("message") or update.get("edited_message")
                 if not msg:
                     continue
@@ -34,7 +36,6 @@ class TelegramBot:
                     continue
                 user = msg.get("from") or {}
                 first_name = user.get("first_name", "User")
-                self.offset = update_id + 1
                 yield chat_id, text, first_name
             time.sleep(0.3)
         except requests.exceptions.RequestException as e:

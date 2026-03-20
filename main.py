@@ -151,11 +151,15 @@ def main():
                                 reply += "No relevant memories found."
                             else:
                                 reply += "\n".join([f"- {file_id}" for file_id in top_files])
+                            mm.on_message("assistant", reply, kind="command_search")
                             telegram.send_message(chat_id, reply)
+                            autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10, allow_addon=False)
+                            mm.after_assistant_sent()
                         continue
 
                     if command == "/start":
                         reply = f"Hi! I'm online."
+                        memory_manager.on_message("assistant", reply, kind="command_start")
                         telegram.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
                         memory_manager.after_assistant_sent()
@@ -166,6 +170,7 @@ def main():
                         st["paused"] = True
                         autopilot.save_state(chat_id, st)
                         reply = "Paused. I won't initiate messages here."
+                        memory_manager.on_message("assistant", reply, kind="command_pause")
                         telegram.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
                         memory_manager.after_assistant_sent()
@@ -176,6 +181,7 @@ def main():
                         st["paused"] = False
                         autopilot.save_state(chat_id, st)
                         reply = "Resumed. I may initiate messages again."
+                        memory_manager.on_message("assistant", reply, kind="command_resume")
                         telegram.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
                         memory_manager.after_assistant_sent()
@@ -183,7 +189,9 @@ def main():
 
                     if command == "/status":
                         reply = autopilot.format_status(chat_id) or ""
+                        memory_manager.on_message("assistant", reply, kind="command_status")
                         telegram.send_message(chat_id, reply)
+                        autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10, allow_addon=False)
                         memory_manager.after_assistant_sent()
                         continue
 
@@ -191,8 +199,6 @@ def main():
                 autopilot.observe_inbound(chat_id, text)
                 memory_manager.on_message(f"user", text, kind="inbound")
                 messages = memory_manager.build_chat_messages(text)
-
-                st = autopilot.load_state(chat_id)
 
                 reply = ask_with_typing(chat_id, messages)
                 if reply:

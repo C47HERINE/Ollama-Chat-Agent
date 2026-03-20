@@ -11,6 +11,7 @@ class PromptBuilder:
         self.paths = paths
         self.vm = vector_manager
         self.config = config
+        self.prompt_templates = self._load_json(os.path.join("config", "prompts.json"))
         self.encoding = tiktoken.get_encoding("cl100k_base")
         self.weather_injector = weather.WeatherInjector()
         retrieval_conf = self.config.get("retrieval", {})
@@ -23,7 +24,8 @@ class PromptBuilder:
 
     def get(self, key: str) -> str:
         try:
-            return self.get(key)
+            value = self.prompt_templates.get(key, "")
+            return value if isinstance(value, str) else ""
         except Exception as e:
             print(e, traceback.format_exc())
             return ""
