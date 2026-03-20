@@ -1,6 +1,6 @@
 import os
 import traceback
-
+from helpers import write_json
 
 class MemoryPaths:
     def __init__(self, root: str, chat_id: int):
@@ -35,6 +35,8 @@ class MemoryPaths:
             raise
 
     def l0_active_path(self) -> str:
+        if not os.path.exists(self.l0_active_path()):
+            write_json(self.l0_active_path(), [])
         return os.path.join(self.l0_dir, "active.json")
 
     def l0_archive_path(self) -> str:

@@ -3,6 +3,7 @@ import time
 import re
 import traceback
 
+
 class Summarizer:
     """Run summary/merge tasks through the LLM using prompt templates."""
     def __init__(self, prompt_lib, llm, system_prompt: str):
@@ -11,7 +12,8 @@ class Summarizer:
         self.system_prompt = system_prompt
 
 
-    def _clean_llm_output(self, text: str) -> str:
+    @staticmethod
+    def _clean_llm_output(text: str) -> str:
         patterns = [
             r"^\s*Okay, I'm ready.*?\n",
             r"^\s*Here is the.*?\n",
@@ -23,7 +25,8 @@ class Summarizer:
         return text.strip()
 
 
-    def _extract_structured_text(self, text: str) -> dict:
+    @staticmethod
+    def _extract_structured_text(text: str) -> dict:
         try:
             data = {}
             # Use regex to find sections. The (?s) flag allows . to match newlines.
@@ -68,7 +71,7 @@ class Summarizer:
             user_prompt = self.prompts.format("l1_diary_user", text=chunk_text)
             messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
             diary_text = self.ollama.ask_messages(messages, stream_to_console=False)
-            diary_text = self._clean_llm_output(diary_text)
+            diary_text = self._clean_llm_output(text=diary_text)
             if not diary_text:
                 return {}
             l1_bullets_system = self.prompts.format("l1_bullets_system")

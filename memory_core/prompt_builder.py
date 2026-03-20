@@ -2,7 +2,7 @@ import json
 import os
 import tiktoken
 import traceback
-from .helpers import read_text
+from .helpers import read_text, read_json
 from core import weather
 
 
@@ -11,12 +11,7 @@ class PromptBuilder:
         self.paths = paths
         self.vm = vector_manager
         self.config = config
-        try:
-            self.encoding = tiktoken.get_encoding(model_encoding)
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
-            self.encoding = None
+        self.encoding = tiktoken.get_encoding(model_encoding)
         self.weather_injector = weather.WeatherInjector()
         retrieval_conf = self.config.get("retrieval", {})
         self.max_context = int(retrieval_conf.get("max_context_tokens", 32000))
@@ -24,6 +19,25 @@ class PromptBuilder:
         self.recent_count = int(retrieval_conf.get("recent_l1_count", 3))
         self.archived_count = int(retrieval_conf.get("archived_l1_count", 3))
         self.effective_limit = self.max_context - self.safety_buffer
+        self.path = paths
+
+    def get(self, key: str) -> str:
+        try:
+            return self.get(key)
+        except Exception as e:
+            print(e, traceback.format_exc())
+            return ""
+
+
+    def format(self, key: str, **kwargs) -> str:
+        try:
+            prompt_template = self.get(key)
+            if not prompt_template:
+                return ""
+            return prompt_template.format(**kwargs)
+        except KeyError as e:
+            return f"ERROR: Prompt formatting failed for key '{key}'. Missing placeholder: {e}"
+
 
     def _count_tokens(self, text):
         try:
@@ -35,6 +49,7 @@ class PromptBuilder:
             traceback.print_exc()
             return max(1, len(text) // 4)
 
+
     def _load_json(self, path):
         try:
             if not os.path.exists(path):
@@ -45,6 +60,7 @@ class PromptBuilder:
             print(e)
             traceback.print_exc()
             return {}
+
 
     def _read_folder(self, folder: str, exclude_files: list | None = None) -> str:
         if exclude_files is None:
@@ -66,6 +82,7 @@ class PromptBuilder:
             traceback.print_exc()
             return ""
 
+
     def _flatten_l4(self, l4_data):
         try:
             md = "## MASTER RECORD (AI's understanding of the user)\n"
@@ -83,6 +100,7 @@ class PromptBuilder:
             traceback.print_exc()
             return "## MASTER RECORD (Error)\n"
 
+
     def _flatten_l1(self, l1_data):
         try:
             md = f"### Entry ID: {l1_data.get('id', 'unknown')}\n"
@@ -94,25 +112,20 @@ class PromptBuilder:
             traceback.print_exc()
             return f"### Entry ID: {l1_data.get('id', 'unknown')} (Error)\n"
 
+
     def _build_fallback_prompt(self, user_input, active_chat_history):
         fallback_history = "".join(
             f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}\n"
-            for msg in (active_chat_history or [])[-20:]
-        )
+            for msg in (active_chat_history or [])[-20:])
         return f"{fallback_history}USER: {user_input}".strip()
 
     def build_prompt(self, user_input, active_chat_history):
         try:
             system_prompt = self._read_folder(self.paths.system_dir)
-
             personal_context_path = self.paths.personal_context_path()
             personal_context = read_text(personal_context_path) or ""
-            other_user_context = self._read_folder(
-                self.paths.user_context_dir,
-                exclude_files=[personal_context_path]
-            )
+            other_user_context = self._read_folder(self.paths.user_context_dir, exclude_files=[personal_context_path])
             user_context_raw = f"{personal_context}\n\n{other_user_context}".strip()
-
             user_context_block = ""
             if user_context_raw:
                 user_context_block = (
@@ -121,36 +134,22 @@ class PromptBuilder:
                     "Do NOT confuse this with your own identity. This is knowledge YOU possess about THEM.\n\n"
                     "<user_profile>\n"
                     f"{user_context_raw}\n"
-                    "</user_profile>\n"
-                )
-
+                    "</user_profile>\n")
             l4_data = self._load_json(self.paths.master_path())
             master_text = self._flatten_l4(l4_data)
 
             # Build retrieval query from the last 5 L0 messages + current user input.
             window = (active_chat_history or [])[-5:]
             retrieval_query = "\n".join(
-                f"{m.get('role', 'user')}: {m.get('content', '')}"
-                for m in window
-                if m.get("content")
-            )
+                f"{m.get('role', 'user')}: {m.get('content', '')}" for m in window if m.get("content"))
 
             if retrieval_query:
                 retrieval_query += f"\nuser: {user_input}"
             else:
                 retrieval_query = user_input
-
-            print("=== RETRIEVAL QUERY ===")
-            print(retrieval_query)
-
             relevant_ids = self.vm.search_and_vote(
                 retrieval_query,
-                top_n_files=self.archived_count
-            )
-
-            print("=== RELEVANT IDS ===")
-            print(relevant_ids)
-
+                top_n_files=self.archived_count)
             archived_text = "## ARCHIVED MEMORIES\n"
             active_core_principles = []
 
@@ -161,15 +160,9 @@ class PromptBuilder:
                     archived_text += self._flatten_l1(l1) + "\n"
                     active_core_principles.extend(l1.get("core_principles", []))
 
-            print("=== ARCHIVED TEXT ===")
-            print(archived_text)
-
             l1_files = []
             if os.path.isdir(self.paths.l1_dir):
-                l1_files = sorted(
-                    [f for f in os.listdir(self.paths.l1_dir) if f.endswith(".json")]
-                )
-
+                l1_files = sorted([f for f in os.listdir(self.paths.l1_dir) if f.endswith(".json")])
             recent_text = "## RECENT MEMORIES\n"
             for file in l1_files[-self.recent_count:]:
                 path = os.path.join(self.paths.l1_dir, file)
@@ -184,23 +177,19 @@ class PromptBuilder:
 
             active_core_principles.extend(l4_data.get("core_principles", []))
             persona_anchor = "## CORE PRINCIPLES\n" + "\n".join(
-                [f"- {r}" for r in sorted(set(active_core_principles))]
-            )
+                [f"- {r}" for r in sorted(set(active_core_principles))])
 
             chat_history_slice = (active_chat_history or [])[-60:]
             chat_text = "## CURRENT CONVERSATION\n" + "".join(
                 f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}\n"
-                for msg in chat_history_slice
-            )
+                for msg in chat_history_slice)
 
             must_have = (
                 f"{system_prompt}\n\n"
                 f"{user_context_block}\n\n"
                 f"{master_text}\n\n"
                 f"{persona_anchor}\n\n"
-                f"{chat_text}"
-            )
-
+                f"{chat_text}")
             must_have_tokens = self._count_tokens(must_have)
             remaining_tokens = self.effective_limit - must_have_tokens
 
@@ -209,16 +198,9 @@ class PromptBuilder:
 
             if 0 < remaining_tokens < optional_tokens:
                 ratio = remaining_tokens / optional_tokens
-                optional_context = optional_context[: int(len(optional_context) * ratio)] + "... [TRUNCATED]"
+                optional_context = optional_context[: int(len(optional_context) * ratio)]
             elif remaining_tokens <= 0:
                 optional_context = ""
-
-            print("must_have_tokens:", must_have_tokens)
-            print("remaining_tokens:", remaining_tokens)
-            print("optional_tokens:", optional_tokens)
-            print("archived_len:", len(archived_text))
-            print("recent_len:", len(recent_text))
-            print("final_optional_context:\n", optional_context)
 
             return (
                 f"{system_prompt}\n\n"

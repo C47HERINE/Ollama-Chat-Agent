@@ -1,7 +1,6 @@
 import os
 import time
-from .helpers import render_chat_as_text, write_text, read_json, write_json
-
+from .helpers import render_chat_as_text, write_text, read_json, write_json, read_all
 
 class MemoryCompactor:
     """Plan and run memory compaction jobs."""
@@ -9,22 +8,44 @@ class MemoryCompactor:
     def __init__(self,
         paths,
         state_store,
-        conversation_buffer,
         summarizer,
         vector_manager,
         l0_summary_msgs: int,
         max_level_files: int,
         l0_max_msgs: int):
-
         self.paths = paths
         self.state_store = state_store
-        self.conversation = conversation_buffer
         self.summarizer = summarizer
         self.vector_manager = vector_manager
         self.l0_summary_msgs = int(l0_summary_msgs)
         self.max_level_files = max_level_files
         self.l0_max_msgs = l0_max_msgs
         self.jobs = []
+        self.active_path = self.paths.active_path
+        self.archive_path = self.paths.archive_path
+
+
+    def pop_oldest(self, count: int) -> list:
+        try:
+            current_data = read_all(self.active_path)
+            if len(current_data) < count:
+                return []
+            to_pop = current_data[:count]
+            remaining = current_data[count:]
+            write_json(self.active_path, remaining)
+            return to_pop
+        except Exception as e:
+            print(e)
+            return []
+
+
+    def archive_many(self, items: list):
+        if not items:
+            return
+        # Read existing archive, append new items, and write back
+        archive_data = read_json(self.archive_path) or []
+        archive_data.extend(items)
+        write_json(self.archive_path, archive_data)
 
 
     def load_jobs(self, state: dict) -> None:
@@ -78,10 +99,10 @@ class MemoryCompactor:
 
 
     def run_l0_compaction(self) -> None:
-        message_chunk = self.conversation.pop_oldest(self.l0_summary_msgs)
+        message_chunk = self.pop_oldest(self.l0_summary_msgs)
         if not message_chunk:
             return
-        self.conversation.archive_many(message_chunk)
+        self.archive_many(message_chunk)
         chunk_text = render_chat_as_text(message_chunk)
         try:
             l1_summary = self.summarizer.l0_to_l1(chunk_text)
