@@ -1,7 +1,7 @@
 import os, re, wave, torch
 import threading
 import numpy as np
-# from chatterbox.tts import ChatterboxTTS
+#from chatterbox.tts import ChatterboxTTS
 
 class VoiceRouter:
     """Route assistant output to Telegram as text or a single voice memo."""
@@ -16,7 +16,7 @@ class VoiceRouter:
         self.batch_target_chars = 300
         self.batch_max_chars = 600
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        # self.model = ChatterboxTTS.from_pretrained(device=self.device)
+#        self.model = ChatterboxTTS.from_pretrained(device=self.device)
         self.model = None
         self.telegram_char_limit = 4096
 
@@ -183,8 +183,8 @@ class VoiceRouter:
                         (max_ch - x.shape[0], x.shape[1]), device=x.device, dtype=x.dtype
                     )
                     normed.append(torch.cat([x, pad], dim=0))
-
         return torch.cat(normed, dim=1)
+
 
     def save_wav(self, path, wav, sample_rate):
         x = wav.detach().cpu()
@@ -204,6 +204,7 @@ class VoiceRouter:
             wf.setsampwidth(2)
             wf.setframerate(int(sample_rate))
             wf.writeframes(pcm.tobytes())
+
 
     def render_voice(self, text: str):
         if self.model is None:

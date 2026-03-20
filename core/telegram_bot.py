@@ -10,15 +10,16 @@ class TelegramBot:
         self.offset = None
         self.timeout = 30
 
-    def  get_updates(self):
+
+    def get_updates(self):
         try:
             method = "getUpdates"
             parameters = {"timeout": self.timeout}
             if self.offset is not None:
                 parameters["offset"] = self.offset
-            r = requests.get(self.base_url + method, params=parameters, timeout=self.timeout + 30)
-            r.raise_for_status()
-            results = r.json().get("result") or []
+            response = requests.get(self.base_url + method, params=parameters, timeout=self.timeout + 30)
+            response.raise_for_status()
+            results = response.json().get("result") or []
             for update in results:
                 update_id = update.get("update_id")
                 msg = update.get("message") or update.get("edited_message")
@@ -36,11 +37,9 @@ class TelegramBot:
                 self.offset = update_id + 1
                 yield chat_id, text, first_name
             time.sleep(0.3)
-
         except requests.exceptions.RequestException as e:
             print(f"[NET_ERROR] {e}")
             time.sleep(5)
-
         except Exception as e:
             print(f"[UNEXPECTED_ERROR] {e}")
             time.sleep(2)
@@ -53,6 +52,7 @@ class TelegramBot:
             "text": text,
             "disable_web_page_preview": disable_web_page_preview,
         }
+
         r = requests.post(self.base_url + method, params=parameters, timeout=60)
         r.raise_for_status()
         return r.json()
@@ -66,9 +66,7 @@ class TelegramBot:
             data = {"chat_id": chat_id}
             if caption:
                 data["caption"] = caption
-            request_post = requests.post(
-                self.base_url + method, data=data, files=files, timeout=120
-            )
+            request_post = requests.post(self.base_url + method, data=data, files=files, timeout=120)
         request_post.raise_for_status()
         return request_post.json()
 

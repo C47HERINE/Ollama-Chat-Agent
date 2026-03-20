@@ -1,10 +1,12 @@
 import json, requests
 
+
 class OllamaChatbot:
     """Chat wrapper for Ollama."""
     def __init__(self, model, host):
         self.model = model
         self.host = host
+
 
     def _make_request(self, endpoint, payload):
         url = f"{self.host}{endpoint}"
@@ -16,15 +18,12 @@ class OllamaChatbot:
             print(f"[OllamaChat] Connection error: {e}")
             return None
 
+
     def stream_chat(self, messages, on_token=None):
         """Uses the /api/chat endpoint for conversational chat."""
         payload = {"model": self.model, "messages": messages, "stream": True}
-        response = self._make_request("/api/chat", payload)
-        if not response:
-            return ""
-
         full_text = ""
-        for line in response.iter_lines(decode_unicode=True):
+        for line in self._make_request("/api/chat", payload).iter_lines(decode_unicode=True):
             if not line:
                 continue
             try:
@@ -40,6 +39,7 @@ class OllamaChatbot:
             except json.JSONDecodeError:
                 continue
         return full_text
+
 
     def ask_messages(self, messages, stream_to_console: bool = True) -> str:
         """Helper to stream chat messages to console or return as string."""

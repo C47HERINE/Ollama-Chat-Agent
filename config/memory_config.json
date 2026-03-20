@@ -1,7 +1,7 @@
 {
   "l0": {
-    "max_msgs": 40,
-    "summary_msgs": 20
+    "max_msgs": 15,
+    "summary_msgs": 5
   },
   "retrieval": {
     "max_context_tokens": 8000,

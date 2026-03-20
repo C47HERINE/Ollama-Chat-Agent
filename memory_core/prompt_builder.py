@@ -5,26 +5,21 @@ import traceback
 from .helpers import read_text, write_text
 from core import weather
 
+
 class PromptBuilder:
     def __init__(self, paths, vector_manager, config, model_encoding="cl100k_base"):
-        try:
-            self.paths = paths
-            self.vm = vector_manager
-            self.config = config
-            self.encoding = tiktoken.get_encoding(model_encoding)
-            self.weather_injector = weather.WeatherInjector()
-            
-            retrieval_conf = self.config.get("retrieval", {})
-            self.max_context = int(retrieval_conf.get("max_context_tokens", 32000))
-            self.safety_buffer = int(retrieval_conf.get("safety_buffer_tokens", 1000))
-            self.recent_count = int(retrieval_conf.get("recent_l1_count", 3))
-            self.archived_count = int(retrieval_conf.get("archived_l1_count", 3))
-            
-            self.effective_limit = self.max_context - self.safety_buffer
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
-            raise
+        self.paths = paths
+        self.vm = vector_manager
+        self.config = config
+        self.encoding = tiktoken.get_encoding(model_encoding)
+        self.weather_injector = weather.WeatherInjector()
+        retrieval_conf = self.config.get("retrieval", {})
+        self.max_context = int(retrieval_conf.get("max_context_tokens", 32000))
+        self.safety_buffer = int(retrieval_conf.get("safety_buffer_tokens", 1000))
+        self.recent_count = int(retrieval_conf.get("recent_l1_count", 3))
+        self.archived_count = int(retrieval_conf.get("archived_l1_count", 3))
+        self.effective_limit = self.max_context - self.safety_buffer
+
 
     def _count_tokens(self, text):
         try:
@@ -33,6 +28,7 @@ class PromptBuilder:
             print(e)
             traceback.print_exc()
             return len(text) // 4 # Fallback approximation
+
 
     def _load_json(self, path):
         try:
@@ -44,6 +40,7 @@ class PromptBuilder:
             print(e)
             traceback.print_exc()
             return {}
+
 
     def _read_folder(self, folder: str, exclude_files: list = None) -> str:
         if exclude_files is None:
@@ -65,6 +62,7 @@ class PromptBuilder:
             traceback.print_exc()
             return ""
 
+
     def _flatten_l4(self, l4_data):
         try:
             md = "## MASTER RECORD (AI's understanding of the user)\n"
@@ -82,6 +80,7 @@ class PromptBuilder:
             traceback.print_exc()
             return "## MASTER RECORD (Error)\n"
 
+
     def _flatten_l1(self, l1_data):
         try:
             md = f"### Entry ID: {l1_data.get('id', 'unknown')}\n"
@@ -93,18 +92,15 @@ class PromptBuilder:
             traceback.print_exc()
             return f"### Entry ID: {l1_data.get('id', 'unknown')} (Error)\n"
 
+
     def build_prompt(self, user_input, active_chat_history):
         try:
             # System Prompt, User Context, Master State
             system_prompt = self._read_folder(self.paths.system_dir)
-            
             personal_context_path = self.paths.personal_context_path()
             personal_context = read_text(personal_context_path) or ""
-            
             other_user_context = self._read_folder(self.paths.user_context_dir, exclude_files=[personal_context_path])
-            
             user_context_raw = f"{personal_context}\n\n{other_user_context}".strip()
-
             user_context_block = ""
             if user_context_raw:
                 user_context_block = (
@@ -114,8 +110,7 @@ class PromptBuilder:
                     "<user_profile>\n"
                     f"{user_context_raw}\n"
                     "</user_profile>\n"
-                )
-            
+                    )
             l4_data = self._load_json(self.paths.master_path())
             master_text = self._flatten_l4(l4_data)
 
@@ -124,8 +119,8 @@ class PromptBuilder:
             archived_text = "## ARCHIVED MEMORIES\n"
             active_core_principles = []
             for rid in relevant_ids:
-                fpath = os.path.join(self.paths.l1_dir, f"{rid}.json")
-                l1 = self._load_json(fpath)
+                path = os.path.join(self.paths.l1_dir, f"{rid}.json")
+                l1 = self._load_json(path)
                 if l1:
                     archived_text += self._flatten_l1(l1) + "\n"
                     active_core_principles.extend(l1.get("core_principles", []))
@@ -133,9 +128,9 @@ class PromptBuilder:
             # Recent Memory
             l1_files = sorted([f for f in os.listdir(self.paths.l1_dir) if f.endswith(".json")])
             recent_text = "## RECENT MEMORIES\n"
-            for fname in l1_files[-self.recent_count:]:
-                fpath = os.path.join(self.paths.l1_dir, fname)
-                l1 = self._load_json(fpath)
+            for file in l1_files[-self.recent_count:]:
+                path = os.path.join(self.paths.l1_dir, file)
+                l1 = self._load_json(path)
                 if l1:
                     recent_text += self._flatten_l1(l1) + "\n"
                     active_core_principles.extend(l1.get("core_principles", []))
@@ -156,15 +151,12 @@ class PromptBuilder:
             must_have = f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{persona_anchor}\n\n{chat_text}"
             must_have_tokens = self._count_tokens(must_have)
             remaining_tokens = self.effective_limit - must_have_tokens
-            
             optional_context = f"{archived_text}\n\n{recent_text}\n\n{weather_text}"
             if self._count_tokens(optional_context) > remaining_tokens:
                 ratio = remaining_tokens / self._count_tokens(optional_context) if self._count_tokens(optional_context) > 0 else 0
                 optional_context = optional_context[:int(len(optional_context) * ratio)] + "... [TRUNCATED]"
-                
             return f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{optional_context}\n\n{persona_anchor}\n\n{chat_text}"
 
         except Exception as e:
             print(e)
             traceback.print_exc()
-            return f"SYSTEM: An error occurred building the prompt. User input was: {user_input}"

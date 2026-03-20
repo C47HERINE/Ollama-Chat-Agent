@@ -9,14 +9,18 @@ from core.ollama_chat import OllamaChatbot
 from core.telegram_bot import TelegramBot
 from core.voice_router import VoiceRouter
 import core.timeutils as t
+from memory_core.helpers import read_json
 from memory_core.memory_manager import MemoryManager
-from memory_core.introspection import IntrospectionEngine
+
 
 CHAT_REGISTRY_PATH = os.path.join("user", "known_chats.json")
 MEM_CONFIG_PATH = os.path.join("config", "memory_config.json")
 PROMPTS_PATH = os.path.join("config", "prompts.json")
 
+
 load_dotenv()
+
+
 ollama_model = os.getenv("OLLAMA_MODEL")
 ollama_host = os.getenv("OLLAMA_HOST")
 telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -26,65 +30,51 @@ autopilot = AutoPilot(tick_every_seconds=30)
 ollama = OllamaChatbot(ollama_model, ollama_host)
 voice_prompt = os.getenv("VOICE_PROMPT_WAV")
 voice = VoiceRouter(audio_prompt_path=voice_prompt)
-introspection = IntrospectionEngine(t)
 
 
 def load_known_chats():
     if not os.path.exists(CHAT_REGISTRY_PATH):
         return set()
-    try:
-        with open(CHAT_REGISTRY_PATH, encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, list):
-            out = set()
-            for x in data:
-                s = str(x).strip()
-                if s.lstrip("-").isdigit():
-                    out.add(int(s))
-            return out
-    except (OSError, ValueError, json.JSONDecodeError) as e:
-        print(e)
-        traceback.print_exc()
+    with open(CHAT_REGISTRY_PATH, encoding="utf-8") as f:
+        data = json.load(f)
+    if isinstance(data, list):
+        out = set()
+        for x in data:
+            s = str(x).strip()
+            if s.lstrip("-").isdigit():
+                out.add(int(s))
+        return out
     return set()
 
+
 def save_known_chats(chat_ids):
-    try:
-        os.makedirs(os.path.dirname(CHAT_REGISTRY_PATH), exist_ok=True)
-        with open(CHAT_REGISTRY_PATH, "w", encoding="utf-8") as f:
-            json.dump(sorted(list(chat_ids)), f, indent=2)
-    except IOError as e:
-        print(e)
-        traceback.print_exc()
+    os.makedirs(os.path.dirname(CHAT_REGISTRY_PATH), exist_ok=True)
+    with open(CHAT_REGISTRY_PATH, "w", encoding="utf-8") as f:
+        json.dump(sorted(list(chat_ids)), f, indent=2)
+
 
 def remember_chat(chat_id, known):
     if chat_id not in known:
         known.add(chat_id)
         save_known_chats(known)
 
+
 def save_debug_log(chat_id, prompt_msgs):
     debug_dir = os.path.join("user", "chats", str(chat_id), "debug")
     os.makedirs(debug_dir, exist_ok=True)
     filename = f"prompt_log_{int(time.time())}.json"
     path = os.path.join(debug_dir, filename)
-    
-    data = {
-        "timestamp": t.now_ms(),
-        "prompt_messages": prompt_msgs
-    }
-    
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
-    except Exception as e:
-        print(e)
-        traceback.print_exc()
+    data = {"timestamp": t.now_ms(), "prompt_messages": prompt_msgs}
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
 
 def main():
     known_chats = load_known_chats()
     for chat_id in list(known_chats):
         autopilot.register_chat(chat_id)
-
     memories = {}
+
     def get_memory_manager(_chat_id: int):
         _chat_id = int(_chat_id)
         if _chat_id not in memories:
@@ -97,34 +87,31 @@ def main():
             )
         return memories[_chat_id]
 
+
     def ask_with_typing(_chat_id: int, msgs):
         stop = threading.Event()
 
         def _loop():
             while not stop.is_set():
-                try:
-                    telegram.send_chat_action(_chat_id, "typing")
-                except Exception as e:
-                    print(e)
-                    traceback.print_exc()
+                telegram.send_chat_action(_chat_id, "typing")
                 stop.wait(4.5)
 
-        t = threading.Thread(target=_loop, daemon=True)
-        t.start()
+        thread = threading.Thread(target=_loop, daemon=True)
+        thread.start()
         try:
             return (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
         finally:
             stop.set()
 
+
     def generate_fn(chat_id, prompt_text):
         mm = get_memory_manager(chat_id)
         msgs = mm.build_chat_messages(prompt_text)
-        
-        st = autopilot.load_state(chat_id)
-        if st.get("debug_mode", False):
+        state = autopilot.load_state(chat_id)
+        if state.get("debug_mode", False):
             save_debug_log(chat_id, msgs)
-            
         return ask_with_typing(chat_id, msgs)
+
 
     def send_fn(chat_id, text_to_send):
         mm = get_memory_manager(chat_id)
@@ -133,14 +120,27 @@ def main():
         autopilot.observe_outbound(chat_id, sent_text, cooldown_minutes=180, allow_addon=False)
         mm.after_assistant_sent()
 
-    def introspection_fn(chat_id, state):
-        if introspection.should_introspect(state, silence_ms=3600_000):
-            mm = get_memory_manager(chat_id)
-            prompt = introspection.build_block()
-            msgs = mm.build_chat_messages(prompt)
+
+    def should_introspect(state: dict) -> bool:
+        if not isinstance(state, dict):
+            return False
+        last_introspection_ms = state.get("last_introspection_ms", 0)
+        last_inbound_ms = state.get("last_inbound_ms", 0)
+        if last_introspection_ms == 0 and last_inbound_ms > 0:
+            return True
+        if t.now_ms() - last_introspection_ms > 3600_000:
+            return True
+        return False
+
+
+    def introspection_fn(state):
+        if should_introspect(state):
+            memory_manager = get_memory_manager(chat_id)
+            prompt = read_json('config/prompts.json')["introspection_prompt"]
+            msgs = memory_manager.build_chat_messages(prompt)
             out = (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
             if out:
-                mm.on_message("system", out, kind="introspection")
+                memory_manager.on_message("system", out, kind="introspection")
                 state["last_introspection_ms"] = t.now_ms()
 
 
@@ -150,7 +150,7 @@ def main():
                 remember_chat(chat_id, known_chats)
                 autopilot.register_chat(chat_id)
                 memory_manager = get_memory_manager(chat_id)
-                
+
                 if text.startswith("/"):
                     parts = text.split(" ", 1)
                     command = parts[0]
@@ -202,7 +202,7 @@ def main():
                         telegram.send_message(chat_id, reply)
                         memory_manager.after_assistant_sent()
                         continue
-                        
+
                     if command == "/debug":
                         st = autopilot.load_state(chat_id)
                         new_mode = not st.get("debug_mode", False)
@@ -215,7 +215,7 @@ def main():
                 autopilot.observe_inbound(chat_id, text)
                 memory_manager.on_message(f"user", text, kind="inbound")
                 messages = memory_manager.build_chat_messages(text)
-                
+
                 st = autopilot.load_state(chat_id)
                 if st.get("debug_mode", False):
                     save_debug_log(chat_id, messages)

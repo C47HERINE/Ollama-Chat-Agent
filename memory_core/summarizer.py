@@ -10,6 +10,7 @@ class Summarizer:
         self.prompts = prompt_lib
         self.system_prompt = system_prompt
 
+
     def _clean_llm_output(self, text: str) -> str:
         patterns = [
             r"^\s*Okay, I'm ready.*?\n",
@@ -20,6 +21,7 @@ class Summarizer:
         for pattern in patterns:
             text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.DOTALL)
         return text.strip()
+
 
     def _extract_structured_text(self, text: str) -> dict:
         try:
@@ -56,30 +58,25 @@ class Summarizer:
             traceback.print_exc()
             return {}
 
+
     def l0_to_l1(self, chunk_text: str) -> dict:
         try:
             if not chunk_text or len(chunk_text.strip()) < 10:
                 return {}
-
             l1_diary_system = self.prompts.format("l1_diary_system")
             system_prompt = f"{self.system_prompt}\n\n{l1_diary_system}"
             user_prompt = self.prompts.format("l1_diary_user", text=chunk_text)
             messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-            
             diary_text = self.ollama.ask_messages(messages, stream_to_console=False)
             diary_text = self._clean_llm_output(diary_text)
-
             if not diary_text:
                 return {}
-
             l1_bullets_system = self.prompts.format("l1_bullets_system")
             system_prompt = f"{self.system_prompt}\n\n{l1_bullets_system}"
             user_prompt = self.prompts.format("l1_bullets_user", diary_entry=diary_text)
             messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-            
             bullets_text = self.ollama.ask_messages(messages, stream_to_console=False)
             bullets_text = self._clean_llm_output(bullets_text)
-            
             bullets = []
             core_principles = []
             for line in bullets_text.split('\n'):
@@ -101,6 +98,7 @@ class Summarizer:
             print(f"An unexpected error occurred in l0_to_l1: {e}")
             traceback.print_exc()
             return {}
+
 
     def update_master(self, master_data: dict, diary: str, core_principles: list[str]) -> dict:
         try:

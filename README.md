@@ -195,27 +195,12 @@ Option B — Manual install:
 1) Activate virtual environment  
    .venv\Scripts\activate
 
-2) Upgrade pip  
-   python -m pip install --upgrade pip
-
-3) Install base dependencies  
+2) Install base dependencies  
    python -m pip install -r requirements.txt
 
-4) Install environment variable support  
-   python -m pip install python-dotenv
+3) Install Chatterbox TTS  
+   python -m pip install chatterbox-tts --no-deps
 
-5) Install Chatterbox TTS  
-   python -m pip install chatterbox-tts
-
-6) Remove any existing PyTorch installs  
-   python -m pip uninstall -y torch torchvision torchaudio
-
-7) Install PyTorch with CUDA 12.8 support  
-   python -m pip install ^  
-     torch==2.7.1+cu128 ^  
-     torchvision==0.22.1+cu128 ^  
-     torchaudio==2.7.1+cu128 ^  
-     --index-url https://download.pytorch.org/whl/cu128
 
 Run:
 python main.py
