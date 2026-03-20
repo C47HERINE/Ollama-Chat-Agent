@@ -16,6 +16,10 @@ def read_json(path: str):
 
 def write_json(path: str, data, indent=2):
     try:
+        from os import makedirs, path as os_path
+        parent = os_path.dirname(path)
+        if parent:
+            makedirs(parent, exist_ok=True)
         with open(path, "w", encoding="utf-8") as file:
             json.dump(data, file, indent=indent, ensure_ascii=False)
     except (IOError, TypeError) as e:
@@ -37,6 +41,10 @@ def read_text(path: str) -> str | None:
 
 def write_text(path: str, text: str):
     try:
+        from os import makedirs, path as os_path
+        parent = os_path.dirname(path)
+        if parent:
+            makedirs(parent, exist_ok=True)
         with open(path, "w", encoding="utf-8") as file:
             file.write(text)
     except IOError as e:

@@ -130,7 +130,7 @@ class AutoPilot:
         for chat_id in list(self.known_chats):
             _state = self.load_state(chat_id)
             if introspection_fn:
-                introspection_fn(_state)
+                introspection_fn(chat_id, _state)
                 self.save_state(chat_id, _state)
             if _state.get("scheduled_send_ms", 0) and t.now_ms() >= _state["scheduled_send_ms"]:
                 kind = _state.get("scheduled_kind") or "starter"

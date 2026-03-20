@@ -23,7 +23,10 @@ class OllamaChatbot:
         """Uses the /api/chat endpoint for conversational chat."""
         payload = {"model": self.model, "messages": messages, "stream": True}
         full_text = ""
-        for line in self._make_request("/api/chat", payload).iter_lines(decode_unicode=True):
+        response = self._make_request("/api/chat", payload)
+        if response is None:
+            return ""
+        for line in response.iter_lines(decode_unicode=True):
             if not line:
                 continue
             try:

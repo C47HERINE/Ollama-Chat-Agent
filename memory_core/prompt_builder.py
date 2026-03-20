@@ -2,7 +2,7 @@ import json
 import os
 import tiktoken
 import traceback
-from .helpers import read_text, write_text
+from .helpers import read_text
 from core import weather
 
 
@@ -11,7 +11,12 @@ class PromptBuilder:
         self.paths = paths
         self.vm = vector_manager
         self.config = config
-        self.encoding = tiktoken.get_encoding(model_encoding)
+        try:
+            self.encoding = tiktoken.get_encoding(model_encoding)
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
+            self.encoding = None
         self.weather_injector = weather.WeatherInjector()
         retrieval_conf = self.config.get("retrieval", {})
         self.max_context = int(retrieval_conf.get("max_context_tokens", 32000))
@@ -20,15 +25,15 @@ class PromptBuilder:
         self.archived_count = int(retrieval_conf.get("archived_l1_count", 3))
         self.effective_limit = self.max_context - self.safety_buffer
 
-
     def _count_tokens(self, text):
         try:
+            if self.encoding is None:
+                return max(1, len(text) // 4)
             return len(self.encoding.encode(text))
         except Exception as e:
             print(e)
             traceback.print_exc()
-            return len(text) // 4 # Fallback approximation
-
+            return max(1, len(text) // 4)
 
     def _load_json(self, path):
         try:
@@ -41,8 +46,7 @@ class PromptBuilder:
             traceback.print_exc()
             return {}
 
-
-    def _read_folder(self, folder: str, exclude_files: list = None) -> str:
+    def _read_folder(self, folder: str, exclude_files: list | None = None) -> str:
         if exclude_files is None:
             exclude_files = []
         try:
@@ -62,7 +66,6 @@ class PromptBuilder:
             traceback.print_exc()
             return ""
 
-
     def _flatten_l4(self, l4_data):
         try:
             md = "## MASTER RECORD (AI's understanding of the user)\n"
@@ -80,7 +83,6 @@ class PromptBuilder:
             traceback.print_exc()
             return "## MASTER RECORD (Error)\n"
 
-
     def _flatten_l1(self, l1_data):
         try:
             md = f"### Entry ID: {l1_data.get('id', 'unknown')}\n"
@@ -92,10 +94,15 @@ class PromptBuilder:
             traceback.print_exc()
             return f"### Entry ID: {l1_data.get('id', 'unknown')} (Error)\n"
 
+    def _build_fallback_prompt(self, user_input, active_chat_history):
+        fallback_history = "".join(
+            f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}\n"
+            for msg in (active_chat_history or [])[-20:]
+        )
+        return f"{fallback_history}USER: {user_input}".strip()
 
     def build_prompt(self, user_input, active_chat_history):
         try:
-            # System Prompt, User Context, Master State
             system_prompt = self._read_folder(self.paths.system_dir)
             personal_context_path = self.paths.personal_context_path()
             personal_context = read_text(personal_context_path) or ""
@@ -110,11 +117,11 @@ class PromptBuilder:
                     "<user_profile>\n"
                     f"{user_context_raw}\n"
                     "</user_profile>\n"
-                    )
+                )
+
             l4_data = self._load_json(self.paths.master_path())
             master_text = self._flatten_l4(l4_data)
 
-            # Vector Search
             relevant_ids = self.vm.search_and_vote(user_input, top_n_files=self.archived_count)
             archived_text = "## ARCHIVED MEMORIES\n"
             active_core_principles = []
@@ -125,8 +132,9 @@ class PromptBuilder:
                     archived_text += self._flatten_l1(l1) + "\n"
                     active_core_principles.extend(l1.get("core_principles", []))
 
-            # Recent Memory
-            l1_files = sorted([f for f in os.listdir(self.paths.l1_dir) if f.endswith(".json")])
+            l1_files = []
+            if os.path.isdir(self.paths.l1_dir):
+                l1_files = sorted([f for f in os.listdir(self.paths.l1_dir) if f.endswith(".json")])
             recent_text = "## RECENT MEMORIES\n"
             for file in l1_files[-self.recent_count:]:
                 path = os.path.join(self.paths.l1_dir, file)
@@ -135,28 +143,34 @@ class PromptBuilder:
                     recent_text += self._flatten_l1(l1) + "\n"
                     active_core_principles.extend(l1.get("core_principles", []))
 
-            # Weather
             weather_text = self.weather_injector.weather_updater() or ""
-            if weather_text: weather_text = f"## LOW PRIORITY INFO\n{weather_text}\n"
+            if weather_text:
+                weather_text = f"## LOW PRIORITY INFO\n{weather_text}\n"
 
-            # Core Principles
             active_core_principles.extend(l4_data.get("core_principles", []))
-            persona_anchor = "## CORE PRINCIPLES\n" + "\n".join([f"- {r}" for r in sorted(list(set(active_core_principles)))])
+            persona_anchor = "## CORE PRINCIPLES\n" + "\n".join(
+                [f"- {r}" for r in sorted(set(active_core_principles))]
+            )
 
-            # Chat History
-            chat_history_slice = active_chat_history[-60:]
-            chat_text = "## CURRENT CONVERSATION\n" + "".join(f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}\n" for msg in chat_history_slice)
+            chat_history_slice = (active_chat_history or [])[-60:]
+            chat_text = "## CURRENT CONVERSATION\n" + "".join(
+                f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}\n"
+                for msg in chat_history_slice
+            )
 
-            # Assemble and Truncate
             must_have = f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{persona_anchor}\n\n{chat_text}"
             must_have_tokens = self._count_tokens(must_have)
             remaining_tokens = self.effective_limit - must_have_tokens
             optional_context = f"{archived_text}\n\n{recent_text}\n\n{weather_text}"
-            if self._count_tokens(optional_context) > remaining_tokens:
-                ratio = remaining_tokens / self._count_tokens(optional_context) if self._count_tokens(optional_context) > 0 else 0
-                optional_context = optional_context[:int(len(optional_context) * ratio)] + "... [TRUNCATED]"
-            return f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{optional_context}\n\n{persona_anchor}\n\n{chat_text}"
+            optional_tokens = self._count_tokens(optional_context)
+            if remaining_tokens > 0 and optional_tokens > remaining_tokens:
+                ratio = remaining_tokens / optional_tokens
+                optional_context = optional_context[: int(len(optional_context) * ratio)] + "... [TRUNCATED]"
+            elif remaining_tokens <= 0:
+                optional_context = ""
 
+            return f"{system_prompt}\n\n{user_context_block}\n\n{master_text}\n\n{optional_context}\n\n{persona_anchor}\n\n{chat_text}"
         except Exception as e:
             print(e)
             traceback.print_exc()
+            return self._build_fallback_prompt(user_input, active_chat_history)

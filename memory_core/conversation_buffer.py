@@ -9,7 +9,8 @@ class ConversationBuffer:
 
 
     def read_all(self) -> list:
-        return read_json(self.active_path) or []
+        data = read_json(self.active_path)
+        return data if isinstance(data, list) else []
 
 
     def append(self, role: str, content: str, kind: str = ""):
@@ -19,15 +20,15 @@ class ConversationBuffer:
             "kind": kind,
             "timestamp": time.time(),
         }
-        current_data = read_json(self.active_path)
+        current_data = self.read_all()
         current_data.append(item)
         write_json(self.active_path, current_data)
 
 
     def pop_oldest(self, count: int) -> list:
         try:
-            current_data = read_json(self.active_path)
-            if len(current_data) <= count:
+            current_data = self.read_all()
+            if len(current_data) < count:
                 return []
             to_pop = current_data[:count]
             remaining = current_data[count:]

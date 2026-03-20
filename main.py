@@ -133,10 +133,13 @@ def main():
         return False
 
 
-    def introspection_fn(state):
+    def introspection_fn(chat_id, state):
         if should_introspect(state):
             memory_manager = get_memory_manager(chat_id)
-            prompt = read_json('config/prompts.json')["introspection_prompt"]
+            prompts = read_json(PROMPTS_PATH) or {}
+            prompt = prompts.get("introspection_prompt", "")
+            if not prompt:
+                return
             msgs = memory_manager.build_chat_messages(prompt)
             out = (ollama.ask_messages(msgs, stream_to_console=False) or "").strip()
             if out:
@@ -235,4 +238,6 @@ def main():
             print(e)
             traceback.print_exc()
 
-main()
+
+if __name__ == "__main__":
+    main()
