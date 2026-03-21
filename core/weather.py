@@ -82,3 +82,17 @@ class WeatherInjector:
         if weather_line:
             lines.append(weather_line)
         return "\n".join(lines)
+
+    def healthcheck(self):
+        if not self.lat or not self.lon:
+            return {"status": "skipped", "reason": "LAT/LON not configured"}
+        sunrise_sunset = self.fetch_sunrise_sunset()
+        if not sunrise_sunset:
+            raise RuntimeError("Sunrise/sunset provider healthcheck failed.")
+        payload = {"status": "ok", "sunrise_sunset": True}
+        if self.api_key:
+            weather = self.fetch_openweather()
+            if weather is None:
+                raise RuntimeError("OpenWeather healthcheck failed.")
+            payload["openweather"] = True
+        return payload

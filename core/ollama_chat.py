@@ -51,3 +51,17 @@ class OllamaChatbot:
             return self.stream_chat(messages, on_token=lambda c: print(c, end="", flush=True))
         else:
             return self.stream_chat(messages)
+
+    def healthcheck(self):
+        response = requests.get(f"{self.host}/api/tags", timeout=15)
+        response.raise_for_status()
+        payload = response.json() or {}
+        models = payload.get("models") or []
+        names = {
+            model_info.get("name")
+            for model_info in models
+            if isinstance(model_info, dict) and model_info.get("name")
+        }
+        if self.model and self.model not in names:
+            raise RuntimeError(f"Ollama model '{self.model}' is not available.")
+        return payload

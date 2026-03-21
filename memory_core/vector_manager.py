@@ -116,3 +116,11 @@ class VectorManager:
             self.collection = self.client.get_or_create_collection(name=self.collection_name)
         except Exception as e:
             print(e, traceback.format_exc())
+
+    def healthcheck(self):
+        try:
+            count = self.collection.count()
+            return {"status": "ok", "collection": self.collection_name, "count": count}
+        except Exception as e:
+            print(e, traceback.format_exc())
+            raise

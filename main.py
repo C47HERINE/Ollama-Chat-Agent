@@ -3,14 +3,19 @@ import os
 import threading
 import time
 import traceback
+from urllib.parse import urlparse
+
 from dotenv import load_dotenv
+
+import core.timeutils as t
 from autopilot.autopilot import AutoPilot
 from core.ollama_chat import OllamaChatbot
 from core.telegram_bot import TelegramBot
 from core.voice_router import VoiceRouter
-import core.timeutils as t
+from core.weather import WeatherInjector
 from memory_core.helpers import read_json
 from memory_core.memory_manager import MemoryManager
+from memory_core.vector_manager import VectorManager
 
 
 CHAT_REGISTRY_PATH = os.path.join("user", "known_chats.json")
@@ -19,17 +24,6 @@ PROMPTS_PATH = os.path.join("config", "prompts.json")
 
 
 load_dotenv()
-
-
-ollama_model = os.getenv("OLLAMA_MODEL")
-ollama_host = os.getenv("OLLAMA_HOST")
-telegram_bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-
-telegram = TelegramBot(telegram_bot_token)
-autopilot = AutoPilot(tick_every_seconds=30)
-ollama = OllamaChatbot(ollama_model, ollama_host)
-voice_prompt = os.getenv("VOICE_PROMPT_WAV")
-voice = VoiceRouter(audio_prompt_path=voice_prompt)
 
 
 def load_known_chats():
@@ -59,7 +53,102 @@ def remember_chat(chat_id, known):
         save_known_chats(known)
 
 
+def _is_valid_url(value: str) -> bool:
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def validate_startup_config(env=None):
+    env = env or os.environ
+    errors = []
+
+    telegram_bot_token = (env.get("TELEGRAM_BOT_TOKEN") or "").strip()
+    ollama_host = (env.get("OLLAMA_HOST") or "").strip()
+    ollama_model = (env.get("OLLAMA_MODEL") or "").strip()
+    voice_prompt = (env.get("VOICE_PROMPT_WAV") or "").strip()
+
+    if not telegram_bot_token:
+        errors.append("Missing required environment variable: TELEGRAM_BOT_TOKEN")
+    if not ollama_host:
+        errors.append("Missing required environment variable: OLLAMA_HOST")
+    elif not _is_valid_url(ollama_host):
+        errors.append("OLLAMA_HOST must be a valid http(s) URL")
+    if not ollama_model:
+        errors.append("Missing required environment variable: OLLAMA_MODEL")
+
+    if not os.path.exists(MEM_CONFIG_PATH):
+        errors.append(f"Missing required file: {MEM_CONFIG_PATH}")
+    if not os.path.exists(PROMPTS_PATH):
+        errors.append(f"Missing required file: {PROMPTS_PATH}")
+    if voice_prompt and not os.path.exists(voice_prompt):
+        errors.append(f"VOICE_PROMPT_WAV does not exist: {voice_prompt}")
+
+    memory_config = read_json(MEM_CONFIG_PATH)
+    if not isinstance(memory_config, dict):
+        errors.append(f"Invalid JSON configuration in {MEM_CONFIG_PATH}")
+
+    prompts = read_json(PROMPTS_PATH)
+    if not isinstance(prompts, dict):
+        errors.append(f"Invalid JSON configuration in {PROMPTS_PATH}")
+    elif "introspection_prompt" not in prompts:
+        errors.append("Missing required prompt key: introspection_prompt")
+
+    if errors:
+        raise RuntimeError("Startup validation failed:\n- " + "\n- ".join(errors))
+
+    return {
+        "telegram_bot_token": telegram_bot_token,
+        "ollama_host": ollama_host.rstrip("/"),
+        "ollama_model": ollama_model,
+        "voice_prompt": voice_prompt or None,
+    }
+
+
+def create_runtime(env=None):
+    config = validate_startup_config(env=env)
+    runtime = {
+        "telegram": TelegramBot(config["telegram_bot_token"]),
+        "autopilot": AutoPilot(tick_every_seconds=30),
+        "ollama": OllamaChatbot(config["ollama_model"], config["ollama_host"]),
+        "voice": VoiceRouter(audio_prompt_path=config["voice_prompt"]),
+    }
+    return config, runtime
+
+
+def run_startup_healthchecks(runtime):
+    telegram = runtime["telegram"]
+    ollama = runtime["ollama"]
+
+    checks = {
+        "telegram": telegram.healthcheck(),
+        "ollama": ollama.healthcheck(),
+        "vector_db": VectorManager(collection_name="startup_healthcheck").healthcheck(),
+        "weather": WeatherInjector().healthcheck(),
+    }
+    return checks
+
+
+def should_introspect(state: dict) -> bool:
+    if not isinstance(state, dict):
+        return False
+    last_introspection_ms = state.get("last_introspection_ms", 0)
+    last_inbound_ms = state.get("last_inbound_ms", 0)
+    if last_introspection_ms == 0 and last_inbound_ms > 0:
+        return True
+    if t.now_ms() - last_introspection_ms > 3600_000:
+        return True
+    return False
+
+
 def main():
+    _, runtime = create_runtime()
+    run_startup_healthchecks(runtime)
+
+    telegram = runtime["telegram"]
+    autopilot = runtime["autopilot"]
+    ollama = runtime["ollama"]
+    voice = runtime["voice"]
+
     known_chats = load_known_chats()
     for chat_id in list(known_chats):
         autopilot.register_chat(chat_id)
@@ -97,21 +186,9 @@ def main():
     def send_fn(chat_id, text_to_send):
         mm = get_memory_manager(chat_id)
         mm.on_message("assistant", text_to_send, kind="autopilot")
-        kind, sent_text = voice.send(telegram, chat_id, text_to_send)
+        _, sent_text = voice.send(telegram, chat_id, text_to_send)
         autopilot.observe_outbound(chat_id, sent_text, cooldown_minutes=180, allow_addon=False)
         mm.after_assistant_sent()
-
-
-    def should_introspect(state: dict) -> bool:
-        if not isinstance(state, dict):
-            return False
-        last_introspection_ms = state.get("last_introspection_ms", 0)
-        last_inbound_ms = state.get("last_inbound_ms", 0)
-        if last_introspection_ms == 0 and last_inbound_ms > 0:
-            return True
-        if t.now_ms() - last_introspection_ms > 3600_000:
-            return True
-        return False
 
 
     def introspection_fn(chat_id, state):
@@ -158,7 +235,7 @@ def main():
                         continue
 
                     if command == "/start":
-                        reply = f"Hi! I'm online."
+                        reply = "Hi! I'm online."
                         memory_manager.on_message("assistant", reply, kind="command_start")
                         telegram.send_message(chat_id, reply)
                         autopilot.observe_outbound(chat_id, reply, cooldown_minutes=10)
@@ -195,17 +272,15 @@ def main():
                         memory_manager.after_assistant_sent()
                         continue
 
-
                 autopilot.observe_inbound(chat_id, text)
-                memory_manager.on_message(f"user", text, kind="inbound")
+                memory_manager.on_message("user", text, kind="inbound")
                 messages = memory_manager.build_chat_messages(text)
 
                 reply = ask_with_typing(chat_id, messages)
                 if reply:
                     memory_manager.on_message("assistant", reply, kind="reply")
-                    kind, sent_text = voice.send(telegram, chat_id, reply)
-                    autopilot.observe_outbound(
-                        chat_id, sent_text, cooldown_minutes=1, allow_addon=True)
+                    _, sent_text = voice.send(telegram, chat_id, reply)
+                    autopilot.observe_outbound(chat_id, sent_text, cooldown_minutes=1, allow_addon=True)
                     memory_manager.after_assistant_sent()
 
             autopilot.tick(send_fn=send_fn, generate_fn=generate_fn, introspection_fn=introspection_fn)

@@ -77,3 +77,12 @@ class TelegramBot:
         r = requests.post(self.base_url + method, params=parameters, timeout=15)
         r.raise_for_status()
         return r.json()
+
+    def healthcheck(self):
+        method = "getMe"
+        response = requests.get(self.base_url + method, timeout=15)
+        response.raise_for_status()
+        payload = response.json()
+        if not payload.get("ok"):
+            raise RuntimeError("Telegram healthcheck failed.")
+        return payload
