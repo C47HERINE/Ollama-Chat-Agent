@@ -108,8 +108,8 @@ def test_validate_startup_config_requires_expected_settings(monkeypatch, tmp_pat
     (tmp_path / "config" / "memory_config.json").write_text(json.dumps({"retrieval": {}}), encoding="utf-8")
     (tmp_path / "config" / "prompts.json").write_text(json.dumps({"introspection_prompt": "think"}), encoding="utf-8")
 
-    main = importlib.import_module("main")
-    config = main.validate_startup_config(
+    app_runtime = importlib.import_module("app_runtime")
+    config = app_runtime.validate_startup_config(
         {
             "TELEGRAM_BOT_TOKEN": "123:abc",
             "OLLAMA_HOST": "http://localhost:11434/",
@@ -121,7 +121,7 @@ def test_validate_startup_config_requires_expected_settings(monkeypatch, tmp_pat
     assert config["ollama_model"] == "gemma3:12b"
 
     try:
-        main.validate_startup_config({"OLLAMA_HOST": "bad-url", "OLLAMA_MODEL": ""})
+        app_runtime.validate_startup_config({"OLLAMA_HOST": "bad-url", "OLLAMA_MODEL": ""})
     except RuntimeError as exc:
         message = str(exc)
     else:
@@ -133,7 +133,7 @@ def test_validate_startup_config_requires_expected_settings(monkeypatch, tmp_pat
 
 def test_run_startup_healthchecks_calls_all_dependencies(monkeypatch):
     _install_stub_modules(monkeypatch)
-    main = importlib.import_module("main")
+    app_runtime = importlib.import_module("app_runtime")
 
     class DummyTelegram:
         def healthcheck(self):
@@ -154,10 +154,10 @@ def test_run_startup_healthchecks_calls_all_dependencies(monkeypatch):
         def healthcheck(self):
             return {"status": "skipped"}
 
-    monkeypatch.setattr(main, "VectorManager", DummyVectorManager)
-    monkeypatch.setattr(main, "WeatherInjector", DummyWeather)
+    monkeypatch.setattr(app_runtime, "VectorManager", DummyVectorManager)
+    monkeypatch.setattr(app_runtime, "WeatherInjector", DummyWeather)
 
-    checks = main.run_startup_healthchecks({"telegram": DummyTelegram(), "ollama": DummyOllama()})
+    checks = app_runtime.run_startup_healthchecks({"telegram": DummyTelegram(), "ollama": DummyOllama()})
 
     assert checks["telegram"]["status"] == "ok"
     assert checks["vector_db"]["collection"] == "startup_healthcheck"
