@@ -1,51 +1,68 @@
 import json
-import os
+import traceback
+import time
 
-
-def ensure_dir(path: str) -> None:
-    if path:
-        os.makedirs(path, exist_ok=True)
-
-def read_text(path: str) -> str:
-    try:
-        with open(path, encoding="utf-8", errors="replace") as f:
-            return f.read()
-    except Exception as e:
-        print(f"memory_core.helpers.read_text: {e}")
-        return ""
-
-def write_text(path: str, text: str) -> None:
-    ensure_dir(os.path.dirname(path))
-    with open(path, "w", encoding="utf-8", errors="replace") as f:
-        f.write((text or "") + "\n")
 
 def read_json(path: str):
     try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
+        with open(path, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return None
+    except (IOError, json.JSONDecodeError) as e:
+        print(e, traceback.print_exc())
+        return None
+
+
+def read_all(active_path) -> list:
+    data = read_json(active_path)
+    return data if isinstance(data, list) else []
+
+
+def append(active_path, role: str, content: str, kind: str = ""):
+    item = {
+        "role": role,
+        "content": content,
+        "kind": kind,
+        "timestamp": time.time(),
+    }
+    current_data = read_all(active_path)
+    current_data.append(item)
+    write_json(active_path, current_data)
+
+
+def write_json(path, data, indent=2):
+    from os import makedirs, path as os_path
+    parent = os_path.dirname(path)
+    if parent:
+        makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump(data, file, indent=indent, ensure_ascii=False)
+
+
+def read_text(path: str) -> str | None:
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            return file.read()
+    except IOError or FileNotFoundError:
+        return None
+
+
+def write_text(path, text: str):
+    from os import makedirs, path as os_path
+    parent = os_path.dirname(path)
+    if parent:
+        makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as file:
+        file.write(text)
+
+
+def render_chat_as_text(chat_history: list) -> str:
+    try:
+        if not isinstance(chat_history, list):
+            return ""
+        return "\n".join(
+            f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}" for msg in chat_history)
     except Exception as e:
-        print(f"memory_core.helpers.read_json: {e}")
+        print(e, traceback.print_exc())
         return ""
-
-def write_json(path: str, obj) -> None:
-    ensure_dir(os.path.dirname(path))
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(obj, f, ensure_ascii=False, indent=2)
-
-def append_json(path: str, obj: dict) -> None:
-    ensure_dir(os.path.dirname(path))
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(obj, ensure_ascii=False) + "\n")
-
-def render_chat_as_text(items) -> str:
-    """
-    Convert JSON message objects to injection-safe plain text:
-    role: content
-    """
-    lines = []
-    for it in items or []:
-        role = str(it.get("role", ""))
-        content = str(it.get("content", ""))
-        if role and content:
-            lines.append(f"({role}) {content}")
-    return "\n".join(lines)

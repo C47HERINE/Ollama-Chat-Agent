@@ -1,22 +1,12 @@
 {
   "l0": {
-    "max_msgs": 60,
-    "buffer_msgs": 30,
-    "summary_msgs": 30
+    "max_msgs": 15,
+    "summary_msgs": 5
   },
-  "levels": {
-    "max_files": 3
-  },
-  "jobs": {
-    "max_per_assistant_msg": 1
-  },
-  "injection_order": [
-    "user_context",
-    "l1",
-    "l2",
-    "l3",
-    "l4",
-    "low"
-  ],
-  "separation_line": "========================================================================"
+  "retrieval": {
+    "max_context_tokens": 8000,
+    "safety_buffer_tokens": 1000,
+    "recent_l1_count": 2,
+    "archived_l1_count": 4
+  }
 }
