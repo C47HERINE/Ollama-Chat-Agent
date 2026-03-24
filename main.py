@@ -35,8 +35,12 @@ voice = VoiceRouter(audio_prompt_path=voice_prompt)
 def load_known_chats():
     if not os.path.exists(CHAT_REGISTRY_PATH):
         return set()
-    with open(CHAT_REGISTRY_PATH, encoding="utf-8") as f:
-        data = json.load(f)
+    try:
+        with open(CHAT_REGISTRY_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"Warning: failed to parse chat registry at {CHAT_REGISTRY_PATH}: {e}")
+        return set()
     if isinstance(data, list):
         out = set()
         for x in data:
