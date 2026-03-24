@@ -180,9 +180,21 @@ class PromptBuilder:
                 [f"- {r}" for r in sorted(set(active_core_principles))])
 
             chat_history_slice = (active_chat_history or [])[-60:]
-            chat_text = "## CURRENT CONVERSATION\n" + "".join(
+            chat_lines = [
                 f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}\n"
-                for msg in chat_history_slice)
+                for msg in chat_history_slice
+            ]
+            if user_input:
+                last_role = ""
+                last_content = ""
+                if chat_history_slice:
+                    last_msg = chat_history_slice[-1]
+                    last_role = str(last_msg.get("role", "")).lower().strip()
+                    last_content = str(last_msg.get("content", "")).strip()
+                current_input = str(user_input).strip()
+                if not (last_role == "user" and last_content == current_input):
+                    chat_lines.append(f"USER: {current_input}\n")
+            chat_text = "## CURRENT CONVERSATION\n" + "".join(chat_lines)
 
             must_have = (
                 f"{system_prompt}\n\n"
