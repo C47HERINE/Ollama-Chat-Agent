@@ -138,8 +138,10 @@ class MemoryCompactor:
         if not l1_summary:
             return
         diary_text = l1_summary.get("diary", "")
-        locked_rules = l1_summary.get("rules_locked", [])
-        updated_master = self.summarizer.update_master(master_summary, diary_text, locked_rules)
+        core_principles = l1_summary.get("core_principles", [])
+        if not core_principles:
+            core_principles = l1_summary.get("rules_locked", [])
+        updated_master = self.summarizer.update_master(master_summary, diary_text, core_principles)
         if updated_master:
             updated_master["last_updated"] = str(time.time())
             write_json(master_path, updated_master, indent=4)

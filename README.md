@@ -177,33 +177,145 @@ An example is provided as `.env.example`.
 
 ---
 
-## Getting Started
+## Install & Run
 
-Requirements:
+### Prerequisites
+
 - Python 3.10+
-- Telegram Bot Token
-- Local Ollama installation
-- Pulled Ollama model (`ollama run gemma3:12b`)
+- A Telegram bot token from BotFather
+- Local Ollama running (default: `http://localhost:11434`)
+- Pulled model available locally (for example: `ollama pull gemma3:12b`)
 
-Option A — Windows scripts:
+### 1) Clone and enter the project
 
-1) install.bat  
-2) run.bat  
+```bash
+git clone https://github.com/C47HERINE/Ollama-Chat-Agent.git
+cd Ollama-Chat-Agent
+```
 
-Option B — Manual install:
+### 2) Create and activate a virtual environment
 
-1) Activate virtual environment  
-   .venv\Scripts\activate
+Windows (PowerShell):
 
-2) Install base dependencies  
-   python -m pip install -r requirements.txt
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
 
-3) Install Chatterbox TTS  
-   python -m pip install chatterbox-tts --no-deps
+Windows (cmd):
 
+```bat
+python -m venv .venv
+.venv\Scripts\activate
+```
 
-Run:
+Linux/macOS:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+### 3) Install dependencies
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install chatterbox-tts --no-deps
+```
+
+### 4) Configure environment variables
+
+Copy `.env.example` to `.env` and set values:
+
+```env
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=gemma3:12b
+
+VOICE_PROMPT_WAV=path/to/voice.wav
+VOICE_EXAGGERATION=0.5
+VOICE_CFG_WEIGHT=0.5
+TEMPERATURE=0.8
+```
+
+### 5) Start the agent
+
+```bash
 python main.py
+```
+
+### Windows quick path
+
+If you prefer scripts:
+
+1) `install.bat`  
+2) `run.bat`
+
+---
+
+## Memory System (How it actually works)
+
+The memory pipeline is append-only for raw chat and immutable for summaries. This means restarts and long-running sessions are first-class scenarios.
+
+### L0: active + archive raw chat
+
+- Active messages are appended to `l0_active.json`.
+- When compaction triggers, the oldest chunk is moved to archive storage (`l0_archive.json`), never deleted.
+- Roles (`user`, `assistant`, `system`) are preserved with message content and kind metadata.
+
+### L1: semantic diary + bullets + principles
+
+- A chunk of L0 messages is summarized into one L1 JSON file.
+- L1 includes:
+  - `diary` (narrative summary),
+  - `bullets` (indexable memory points),
+  - `core_principles` (stable behavior constraints inferred from interaction context).
+- Each L1 file is immutable once written.
+
+### Master profile updates
+
+- Every new L1 can trigger a master-profile update.
+- The updater merges:
+  - existing master memory,
+  - new L1 diary information,
+  - `core_principles` from that L1 entry.
+- This keeps long-term identity/persona constraints alive as raw history grows.
+
+### Retrieval + prompt construction
+
+For each generation, prompt construction includes:
+
+- System prompt files,
+- user profile/context files,
+- master profile,
+- recent L1 summaries,
+- retrieved archived L1 summaries (vector search),
+- weather/context injector output (low-priority block),
+- current conversation window.
+
+The current user input is explicitly included in the conversation block (with dedupe protection if it is already the last user message in active history), so all generation paths receive the actual task instruction.
+
+#### How `embeddinggemma` retrieval works
+
+Retrieval is vector-based and runs locally through Ollama + ChromaDB:
+
+1) During L0 → L1 compaction, each L1 `bullet` is embedded with Ollama's `embeddinggemma` model and stored in ChromaDB.  
+2) At inference time, the retrieval query is built from recent conversation turns plus the current user input, then embedded with the same `embeddinggemma` model.  
+3) ChromaDB returns the nearest bullet vectors.  
+4) Results are grouped by `source_file` (the L1 summary id), and a majority-vote step selects top L1 files.  
+5) Those top L1 summaries are injected into the prompt as archived memory context.
+
+This setup keeps retrieval consistent because indexing and query embedding use the same embedding model (`embeddinggemma`) and the same local inference host.
+
+### Bounded context
+
+Context is capped using token-aware budgeting:
+
+- hard context limit from config,
+- safety buffer reserved,
+- optional blocks are trimmed proportionally when needed,
+- must-have blocks (system/persona/current conversation) stay prioritized.
 
 ---
 
