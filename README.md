@@ -1,4 +1,11 @@
-[![CI](https://github.com/C47HERINE/Ollama-Chat-Agent/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/C47HERINE/Ollama-Chat-Agent/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-black)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-vector%20memory-ff69b4)
+![RAG](https://img.shields.io/badge/RAG-enabled-blueviolet)
+![Memory](https://img.shields.io/badge/memory-compaction%20%2B%20embedding-critical)
+![Status](https://img.shields.io/badge/status-active%20development-orange)
+![License](https://img.shields.io/badge/license-MIT-green)
+
 # 🤖 Autonomous Chat Agent (Telegram + Ollama)
 
 An experimental systems-level autonomous chat agent written in Python, designed to behave like a real person texting over time.
@@ -44,54 +51,66 @@ Raw logs are the source of truth for all higher-level memory.
 
 ---
 
-### 🧩 Hierarchical Memory Compaction
+## Memory System
 
-To prevent unbounded context growth while preserving semantic continuity, the agent uses LLM-driven hierarchical summarization.
+The memory pipeline is append-only for raw chat and immutable for summaries. 
 
-Memory levels:
+### L0: active + archive raw chat
 
-- Level 0 (Raw)  
-  Unlimited raw messages on disk
+- Active messages are appended to `l0_active.json`.
+- When compaction triggers, the oldest chunk is moved to archive storage (`l0_archive.json`), never deleted.
+- Roles (`user`, `assistant`, `system`) are preserved with message content and kind metadata.
 
-- Level 1 (L1)  
-  - Every 60 messages  
-  - Last 30 summarized  
-  - Strict length cap
+### L1: semantic diary + bullets + principles
 
-- Level 2 (L2)  
-  - Triggered at 3 L1 files  
-  - Last 2 L1 files summarized
+- A chunk of L0 messages is summarized into one L1 JSON file.
+- L1 includes:
+  - `diary` (narrative summary),
+  - `bullets` (indexable memory points),
+  - `core_principles` (stable behavior constraints inferred from interaction context).
+- Each L1 file is immutable once written.
 
-- Level 3 (L3)  
-  - Triggered at 3 L2 files  
-  - Last 2 L2 files summarized
+### Master profile updates
 
-- Master Memory  
-  - Triggered at 3 L3 files  
-  - Existing master + last 2 L3 files summarized together  
-  - Produces a new master file (compression, not appending)
+- Every new L1 can trigger a master-profile update.
+- The updater merges:
+  - existing master memory,
+  - new L1 diary information,
+  - `core_principles` from that L1 entry.
+- This keeps long-term identity/persona constraints alive as raw history grows.
 
-All summaries are immutable once written.  
-No memory file is ever deleted or overwritten.
+### Retrieval + prompt construction
 
-Compaction is executed as a serialized background process.  
-Only one compaction task runs at a time; additional tasks are queued and prioritized via a persistent state file to prevent concurrent writes and runaway processing.
+For each generation, prompt construction includes:
+
+- System prompt files,
+- user profile/context files,
+- master profile,
+- recent L1 summaries,
+- retrieved archived L1 summaries (vector search),
+- weather/context injector output (low-priority block),
+- current conversation window.
+
+#### How vector retrieval works
+
+Retrieval is vector-based and runs locally through Ollama + ChromaDB:
+
+1) During L0 → L1 compaction, each L1 `bullet` is embedded with Ollama's `embeddingGemma` model and stored in ChromaDB.  
+2) At inference time, the retrieval query is built from recent conversation turns plus the current user input, then embedded with the same model.  
+3) ChromaDB returns the nearest bullet vectors.  
+4) Results are grouped by `source_file` (the L1 summary id), and a majority-vote step selects top L1 files.  
+5) Those top L1 summaries are injected into the prompt as archived memory context.
 
 ---
 
-### 🧠 Context Injection (Strictly Bounded)
+### Bounded context
 
-At inference time, the agent injects at most:
+Context is capped using token-aware budgeting:
 
-- ≤ 60 recent raw messages  
-- ≤ 3 L1 summaries  
-- ≤ 3 L2 summaries  
-- ≤ 3 L3 summaries  
-- ≤ 1 master memory  
-
-Each tier has its own length cap.
-
-Context is rebuilt only when memory changes (for example, during compaction), minimizing disk I/O, recomputation, and unnecessary inference overhead.
+- hard context limit from config,
+- safety buffer reserved,
+- optional blocks are trimmed proportionally when needed,
+- must-have blocks (system/persona/current conversation) stay prioritized.
 
 ---
 
@@ -251,71 +270,6 @@ If you prefer scripts:
 
 1) `install.bat`  
 2) `run.bat`
-
----
-
-## Memory System (How it actually works)
-
-The memory pipeline is append-only for raw chat and immutable for summaries. This means restarts and long-running sessions are first-class scenarios.
-
-### L0: active + archive raw chat
-
-- Active messages are appended to `l0_active.json`.
-- When compaction triggers, the oldest chunk is moved to archive storage (`l0_archive.json`), never deleted.
-- Roles (`user`, `assistant`, `system`) are preserved with message content and kind metadata.
-
-### L1: semantic diary + bullets + principles
-
-- A chunk of L0 messages is summarized into one L1 JSON file.
-- L1 includes:
-  - `diary` (narrative summary),
-  - `bullets` (indexable memory points),
-  - `core_principles` (stable behavior constraints inferred from interaction context).
-- Each L1 file is immutable once written.
-
-### Master profile updates
-
-- Every new L1 can trigger a master-profile update.
-- The updater merges:
-  - existing master memory,
-  - new L1 diary information,
-  - `core_principles` from that L1 entry.
-- This keeps long-term identity/persona constraints alive as raw history grows.
-
-### Retrieval + prompt construction
-
-For each generation, prompt construction includes:
-
-- System prompt files,
-- user profile/context files,
-- master profile,
-- recent L1 summaries,
-- retrieved archived L1 summaries (vector search),
-- weather/context injector output (low-priority block),
-- current conversation window.
-
-The current user input is explicitly included in the conversation block (with dedupe protection if it is already the last user message in active history), so all generation paths receive the actual task instruction.
-
-#### How `embeddinggemma` retrieval works
-
-Retrieval is vector-based and runs locally through Ollama + ChromaDB:
-
-1) During L0 → L1 compaction, each L1 `bullet` is embedded with Ollama's `embeddinggemma` model and stored in ChromaDB.  
-2) At inference time, the retrieval query is built from recent conversation turns plus the current user input, then embedded with the same `embeddinggemma` model.  
-3) ChromaDB returns the nearest bullet vectors.  
-4) Results are grouped by `source_file` (the L1 summary id), and a majority-vote step selects top L1 files.  
-5) Those top L1 summaries are injected into the prompt as archived memory context.
-
-This setup keeps retrieval consistent because indexing and query embedding use the same embedding model (`embeddinggemma`) and the same local inference host.
-
-### Bounded context
-
-Context is capped using token-aware budgeting:
-
-- hard context limit from config,
-- safety buffer reserved,
-- optional blocks are trimmed proportionally when needed,
-- must-have blocks (system/persona/current conversation) stay prioritized.
 
 ---
 
