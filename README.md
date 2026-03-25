@@ -1,7 +1,6 @@
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![Ollama](https://img.shields.io/badge/Ollama-local%20LLM-black)
 ![ChromaDB](https://img.shields.io/badge/ChromaDB-vector%20memory-ff69b4)
-![RAG](https://img.shields.io/badge/RAG-enabled-blueviolet)
 ![Memory](https://img.shields.io/badge/memory-compaction%20%2B%20embedding-critical)
 ![Status](https://img.shields.io/badge/status-active%20development-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
