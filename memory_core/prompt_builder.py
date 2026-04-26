@@ -2,12 +2,12 @@ import json
 import os
 import tiktoken
 import traceback
-from .helpers import read_text
+from .helpers import read_text, read_json
 from core import weather
 
 
 class PromptBuilder:
-    def __init__(self, paths, vector_manager, config):
+    def __init__(self, paths, vector_manager, config, prompts_path=""):
         self.paths = paths
         self.vm = vector_manager
         self.config = config
@@ -20,10 +20,11 @@ class PromptBuilder:
         self.archived_count = int(retrieval_conf.get("archived_l1_count", 3))
         self.effective_limit = self.max_context - self.safety_buffer
         self.path = paths
+        self.prompts_data = (read_json(prompts_path) or {}) if prompts_path else {}
 
     def get(self, key: str) -> str:
         try:
-            return self.get(key)
+            return self.prompts_data.get(key, "")
         except Exception as e:
             print(e, traceback.format_exc())
             return ""
@@ -83,7 +84,7 @@ class PromptBuilder:
             return ""
 
 
-    def _flatten_l4(self, l4_data):
+    def _flatten_master(self, l4_data):
         try:
             md = "## MASTER RECORD (AI's understanding of the user)\n"
             if l4_data.get("bio"):
@@ -136,7 +137,7 @@ class PromptBuilder:
                     f"{user_context_raw}\n"
                     "</user_profile>\n")
             l4_data = self._load_json(self.paths.master_path())
-            master_text = self._flatten_l4(l4_data)
+            master_text = self._flatten_master(l4_data)
 
             # Build retrieval query from the last 5 L0 messages + current user input.
             window = (active_chat_history or [])[-5:]

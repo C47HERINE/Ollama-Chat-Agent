@@ -2,9 +2,8 @@
 setlocal
 cd /d "%~dp0"
 
-REM --- Create venv explicitly with Python 3.11 ---
+REM
 if not exist ".venv\Scripts\python.exe" (
-    echo Creating virtual environment with Python 3.11...
     py -3.11 -m venv .venv
 )
 

@@ -8,5 +8,8 @@
     "safety_buffer_tokens": 1000,
     "recent_l1_count": 2,
     "archived_l1_count": 4
+  },
+  "levels": {
+    "max_files": 3
   }
 }

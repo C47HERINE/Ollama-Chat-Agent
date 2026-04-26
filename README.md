@@ -27,7 +27,7 @@ The agent:
 - Sends autonomous messages based on silence and timing rules
 - Produces text or voice output depending on length or command
 - Integrates external environment data via REST APIs
-- Runs continuously with no cloud dependencies
+- Runs continuously with no cloud LLM or storage dependencies
 
 This project is designed as a portfolio-grade systems demo, emphasizing stateful agents, context orchestration, deterministic bounds, and long-running stability.
 
@@ -56,8 +56,8 @@ The memory pipeline is append-only for raw chat and immutable for summaries.
 
 ### L0: active + archive raw chat
 
-- Active messages are appended to `l0_active.json`.
-- When compaction triggers, the oldest chunk is moved to archive storage (`l0_archive.json`), never deleted.
+- Active messages are appended to `l0/active.json`.
+- When compaction triggers, the oldest chunk is moved to archive storage (`l0/archive.json`), never deleted.
 - Roles (`user`, `assistant`, `system`) are preserved with message content and kind metadata.
 
 ### L1: semantic diary + bullets + principles
@@ -108,7 +108,7 @@ Context is capped using token-aware budgeting:
 
 - hard context limit from config,
 - safety buffer reserved,
-- optional blocks are trimmed proportionally when needed,
+- optional blocks are truncated by character ratio when budget is exceeded,
 - must-have blocks (system/persona/current conversation) stay prioritized.
 
 ---
@@ -146,7 +146,7 @@ All autonomous actions are logged internally for traceability.
 - Text is the default output
 - Voice output is triggered by:
   - Message length thresholds
-  - Explicit /voice command
+  - Explicit /voice keyword anywhere in the reply triggers TTS for that segment
 - Uses Chatterbox TTS (fully local)
 - Supports custom voices from ~10s audio samples
 - Sentence-aware chunking allows very long voice memos
@@ -170,9 +170,8 @@ The system is designed so that operational concerns (memory safety, serializatio
 ## Model & Runtime
 
 - LLM: gemma3:12b
-- Persona: baked into the model via `ollama create -f Modelfile`  
-  External system prompt injection is temporarily disabled due to Ollama behavior
-- Context length: < 32k (bounded by design)
+- Persona: injected via system prompt files in user/system/
+- Context length: 8k tokens (bounded by config, safety-buffered)
 - Hardware tested: RTX 5070 Ti
 - Observed behavior: fast inference, stable memory, no lag
 
@@ -191,6 +190,12 @@ VOICE_EXAGGERATION=0.5
 VOICE_CFG_WEIGHT=0.5  
 TEMPERATURE=0.8  
 
+LAT=your_latitude
+LON=your_longitude
+TZ=your_timezone
+UNITS=metric
+OPENWEATHER_API_KEY=your_openweather_key_or_leave_blank
+
 An example is provided as `.env.example`.
 
 ---
@@ -203,6 +208,7 @@ An example is provided as `.env.example`.
 - A Telegram bot token from BotFather
 - Local Ollama running (default: `http://localhost:11434`)
 - Pulled model available locally (for example: `ollama pull gemma3:12b`)
+- Embedding model pulled locally (for example: `ollama pull embeddinggemma`)
 
 ### 1) Clone and enter the project
 
@@ -255,6 +261,12 @@ VOICE_PROMPT_WAV=path/to/voice.wav
 VOICE_EXAGGERATION=0.5
 VOICE_CFG_WEIGHT=0.5
 TEMPERATURE=0.8
+
+LAT=your_latitude
+LON=your_longitude
+TZ=your_timezone
+UNITS=metric
+OPENWEATHER_API_KEY=your_openweather_key_or_leave_blank
 ```
 
 ### 5) Start the agent
@@ -278,6 +290,7 @@ If you prefer scripts:
 - /pause — Disable autonomous messages  
 - /resume — Re-enable autonomous messages  
 - /status — Show internal agent status  
+- /search <query> — Search vector memory for relevant past conversations
 
 ---
 

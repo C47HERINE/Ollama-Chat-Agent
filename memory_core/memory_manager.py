@@ -11,7 +11,7 @@ from .prompt_builder import PromptBuilder
 
 
 class MemoryManager:
-    def __init__(self, root: str, chat_id: int, config_path: str, llm):
+    def __init__(self, root: str, chat_id: int, config_path: str, llm, prompts_path: str = ""):
         self.paths = MemoryPaths(root=root, chat_id=chat_id)
 
         self.paths.ensure()
@@ -26,7 +26,7 @@ class MemoryManager:
         system_prompt_path = os.path.join(self.paths.system_dir, "system_prompt.txt")
         system_prompt = read_text(system_prompt_path) or ""
 
-        self.prompt_builder = PromptBuilder(self.paths, self.vector_manager, self.config)
+        self.prompt_builder = PromptBuilder(self.paths, self.vector_manager, self.config, prompts_path)
 
         self.summarizer = Summarizer(prompt_lib=self.prompt_builder, llm=llm, system_prompt=system_prompt)
 

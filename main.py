@@ -72,7 +72,7 @@ def main():
     def get_memory_manager(_chat_id: int):
         _chat_id = int(_chat_id)
         if _chat_id not in memories:
-            memories[_chat_id] = MemoryManager(root=".", chat_id=_chat_id, llm=ollama, config_path=MEM_CONFIG_PATH)
+            memories[_chat_id] = MemoryManager(root=".", chat_id=_chat_id, llm=ollama, config_path=MEM_CONFIG_PATH, prompts_path=PROMPTS_PATH)
         return memories[_chat_id]
 
 

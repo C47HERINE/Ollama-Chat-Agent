@@ -91,11 +91,9 @@ class Summarizer:
                         core_principles.append(clean_line)
 
             return {
-                "id": f"l1_{int(time.time())}",
                 "diary": diary_text,
                 "bullets": sorted(list(set(bullets))),
                 "core_principles": sorted(list(set(core_principles))),
-                "timestamp": str(time.time())
             }
         except Exception as e:
             print(f"An unexpected error occurred in l0_to_l1: {e}")

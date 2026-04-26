@@ -44,7 +44,7 @@ def read_text(path: str) -> str | None:
     try:
         with open(path, "r", encoding="utf-8") as file:
             return file.read()
-    except IOError or FileNotFoundError:
+    except (IOError, FileNotFoundError):
         return None
 
 
