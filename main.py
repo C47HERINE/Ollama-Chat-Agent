@@ -1,3 +1,26 @@
+import os
+import glob
+import ctypes
+
+# Preload all NVIDIA CUDA shared libs from venv before torch import.
+# Setting LD_LIBRARY_PATH alone is insufficient — the process inherits the env
+# from before Python starts. We must ctypes.CDLL each .so explicitly.
+_venv_nvidia = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv", "lib", "python3.11", "site-packages", "nvidia")
+if os.path.isdir(_venv_nvidia):
+    _lib_dirs = sorted(glob.glob(os.path.join(_venv_nvidia, "*", "lib")))
+    # Also set env for any child processes
+    _existing = os.environ.get("LD_LIBRARY_PATH", "")
+    _to_add = [d for d in _lib_dirs if d not in _existing]
+    if _to_add:
+        os.environ["LD_LIBRARY_PATH"] = ":".join(_to_add) + (":" + _existing if _existing else "")
+    # Preload every .so file
+    for _lib_dir in _lib_dirs:
+        for _so in sorted(glob.glob(os.path.join(_lib_dir, "*.so*"))):
+            try:
+                ctypes.CDLL(_so, mode=ctypes.RTLD_GLOBAL)
+            except OSError:
+                pass
+
 import json
 import os
 import threading
@@ -199,6 +222,10 @@ def main():
                 st = autopilot.load_state(chat_id)
 
                 reply = ask_with_typing(chat_id, messages)
+                # Strip leaked role prefixes from model output
+                for _prefix in ("ASSISTANT:", "SYSTEM:", "Assistant:", "System:"):
+                    if reply and reply.lstrip().startswith(_prefix):
+                        reply = reply.lstrip()[len(_prefix):].lstrip()
                 if reply:
                     memory_manager.on_message("assistant", reply, kind="reply")
                     kind, sent_text = voice.send(telegram, chat_id, reply)

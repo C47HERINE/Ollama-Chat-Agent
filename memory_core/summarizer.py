@@ -82,13 +82,23 @@ class Summarizer:
             bullets_text = self._clean_llm_output(bullets_text)
             bullets = []
             core_principles = []
+            section = "bullets"
             for line in bullets_text.split('\n'):
-                line = line.strip()
-                if line.startswith('-'):
-                    clean_line = line[1:].strip()
-                    bullets.append(clean_line)
-                    if "rule" in clean_line.lower() or "must" in clean_line.lower() or "principle" in clean_line.lower():
+                stripped = line.strip().upper()
+                if stripped.startswith("PRINCIPLES"):
+                    section = "principles"
+                    continue
+                if stripped.startswith("BULLETS"):
+                    section = "bullets"
+                    continue
+                if line.strip().startswith('-'):
+                    clean_line = line.strip()[1:].strip()
+                    if not clean_line or clean_line.lower() == "none identified.":
+                        continue
+                    if section == "principles":
                         core_principles.append(clean_line)
+                    else:
+                        bullets.append(clean_line)
 
             return {
                 "diary": diary_text,

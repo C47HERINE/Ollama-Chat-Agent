@@ -1,3 +1,4 @@
+import os
 import chromadb
 import requests
 import traceback
@@ -7,7 +8,7 @@ from collections import Counter
 class VectorManager:
     """Handles embedding, storage, and retrieval using ChromaDB."""
 
-    def __init__(self, collection_name="memory_bullets", host="http://localhost:11434", model="embeddinggemma"):
+    def __init__(self, collection_name="memory_bullets", host=None, model="embeddinggemma"):
         """Initialize ChromaDB client and embedding API settings."""
         try:
             # Persistent local ChromaDB storage
@@ -18,7 +19,7 @@ class VectorManager:
             self.collection = self.client.get_or_create_collection(name=self.collection_name)
 
             # Embedding API config (Ollama or similar)
-            self.host = host
+            self.host = host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
             self.model = model
 
         except Exception as e:
@@ -28,11 +29,12 @@ class VectorManager:
     def _get_embedding(self, text, prefix=""):
         """Generate embedding vector from text using external API."""
         try:
-            url = f"{self.host}/api/embeddings"
+            url = f"{self.host}/api/embed"
             payload = {"model": self.model, "prompt": f"{prefix}{text}"}
             response = requests.post(url, json=payload)
             response.raise_for_status()
-            return response.json()["embedding"]
+            data = response.json()
+            return data.get("embedding") or (data.get("embeddings") or [None])[0]
 
         except requests.exceptions.RequestException as e:
             print(e, traceback.format_exc())

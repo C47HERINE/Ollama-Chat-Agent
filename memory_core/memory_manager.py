@@ -45,8 +45,7 @@ class MemoryManager:
     def build_chat_messages(self, user_text: str) -> list[dict]:
         try:
             l0_items = read_all(self.paths.l0_active_path()) or []
-            prompt_str = self.prompt_builder.build_prompt(user_text, l0_items)
-            return [{"role": "user", "content": prompt_str}]
+            return self.prompt_builder.build_prompt(user_text, l0_items)
         except Exception as e:
             print(e)
             traceback.print_exc()

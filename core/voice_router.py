@@ -9,9 +9,9 @@ class VoiceRouter:
         self.audio_prompt_path = audio_prompt_path
         self.audio_out_path = "./user/voice/temp/voice_memo.wav"
         self.voice_command = "/voice"
-        self.cfg_weight = 0.5
+        self.cfg_weight = 1.0
         self.exaggeration = 0.5
-        self.temperature = 0.8
+        self.temperature = 0.5
         self.threshold_chars = 400
         self.batch_target_chars = 300
         self.batch_max_chars = 600
@@ -208,6 +208,15 @@ class VoiceRouter:
 
     def render_voice(self, text: str):
         if self.model is None:
+            # Patch out perth watermarker — the pypi 'perth' package is unrelated
+            import types
+            import perth as _perth
+            if not hasattr(_perth, 'PerthImplicitWatermarker'):
+                class _NoOpWatermarker:
+                    def __call__(self, *a, **kw): return a[0] if a else None
+                    def apply(self, *a, **kw): return a[0] if a else None
+                    def apply_watermark(self, wav, *a, **kw): return wav
+                _perth.PerthImplicitWatermarker = _NoOpWatermarker
             from chatterbox.tts import ChatterboxTTS
             self.model = ChatterboxTTS.from_pretrained(device=self.device)
 

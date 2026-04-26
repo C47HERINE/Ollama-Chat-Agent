@@ -118,7 +118,8 @@ class PromptBuilder:
         fallback_history = "".join(
             f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}\n"
             for msg in (active_chat_history or [])[-20:])
-        return f"{fallback_history}USER: {user_input}".strip()
+        user_content = f"{fallback_history}USER: {user_input}".strip()
+        return [{"role": "user", "content": user_content}]
 
     def build_prompt(self, user_input, active_chat_history):
         try:
@@ -180,21 +181,29 @@ class PromptBuilder:
             persona_anchor = "## CORE PRINCIPLES\n" + "\n".join(
                 [f"- {r}" for r in sorted(set(active_core_principles))])
 
-            chat_history_slice = (active_chat_history or [])[-60:]
-            chat_lines = [
-                f"{msg.get('role', 'unknown').upper()}: {msg.get('content', '')}\n"
-                for msg in chat_history_slice
-            ]
+            # Exclude system/introspection messages from visible conversation
+            visible_history = [
+                msg for msg in (active_chat_history or [])
+                if msg.get("role") in ("user", "assistant") and msg.get("kind") != "introspection"
+            ][-60:]
+            chat_lines = []
+            for msg in visible_history:
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                if role == "user":
+                    chat_lines.append(f"User: {content}\n")
+                elif role == "assistant":
+                    chat_lines.append(f"You: {content}\n")
             if user_input:
                 last_role = ""
                 last_content = ""
-                if chat_history_slice:
-                    last_msg = chat_history_slice[-1]
+                if visible_history:
+                    last_msg = visible_history[-1]
                     last_role = str(last_msg.get("role", "")).lower().strip()
                     last_content = str(last_msg.get("content", "")).strip()
                 current_input = str(user_input).strip()
                 if not (last_role == "user" and last_content == current_input):
-                    chat_lines.append(f"USER: {current_input}\n")
+                    chat_lines.append(f"User: {current_input}\n")
             chat_text = "## CURRENT CONVERSATION\n" + "".join(chat_lines)
 
             must_have = (
@@ -215,14 +224,17 @@ class PromptBuilder:
             elif remaining_tokens <= 0:
                 optional_context = ""
 
-            return (
+            system_content = (
                 f"{system_prompt}\n\n"
                 f"{user_context_block}\n\n"
                 f"{master_text}\n\n"
                 f"{optional_context}\n\n"
-                f"{persona_anchor}\n\n"
-                f"{chat_text}"
-            )
+                f"{persona_anchor}"
+            ).strip()
+            return [
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": chat_text.strip()}
+            ]
 
         except Exception as e:
             print(e)
